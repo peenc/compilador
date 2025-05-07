@@ -151,14 +151,29 @@ E 			: ARITMETICO
 				$$.traducao = $3.traducao + "\t" + sim.nome + " = " + $3.label + ";\n";
 
 			}
-    		| TIPO
+			| '(' CAST ')' E 
+			{
+				$$.tipo = $2.tipo;
+				$$.label = gerarvariavel($$.tipo);
+				$$.traducao = $4.traducao + "\t" + $$.label + " = (" + $2.tipo + ") " + $4.label + ";\n";			
+			}
+    				
+
+    		| TIPOS
     		{
     			$$.traducao = $1.traducao;
     		}
-
-    		
-
     		;
+
+CAST 		: TK_TIPO_INT
+			{
+				$$.tipo = "int";
+			}
+			| TK_TIPO_FLOAT
+			{
+				$$.tipo = "float";
+			}
+			;
 LOGICO		: E TK_AND E
 			{	
 			
@@ -227,7 +242,7 @@ ARITMETICO  : E '+' E
     		}
     		;
 
-TIPO 		: TK_LOGICO
+TIPOS 		: TK_LOGICO
 			{
 				$$.tipo = "bool";
 				$$.label = gerarvariavel($$.tipo);
