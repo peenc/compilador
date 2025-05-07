@@ -39,7 +39,7 @@ ID {LETRA}({LETRA}|{NUM})*
 [<]         { return *yytext; }
 [>]         { return *yytext; }
 "<="        { yylval.traducao = " <= "; return TK_MENOR_IGUAL; }
-"=>"        { yylval.traducao = " => "; return TK_MAIOR_IGUAL; }
+">="        { yylval.traducao = " => "; return TK_MAIOR_IGUAL; }
 "!="        { yylval.traducao = " != "; return TK_DIFERENTE; }
 "=="        { yylval.traducao = " == "; return TK_IGUALDADE; }
 
@@ -51,6 +51,10 @@ ID {LETRA}({LETRA}|{NUM})*
 {REAL}		{ yylval.label = yytext; return TK_REAL; }
 {ID}		{ yylval.label = yytext; return TK_ID; }
 {CHAR}		{ yylval.label = yytext; return TK_CHAR; }
+
+"&&"        return TK_AND;
+"||"        return TK_OR;
+"!"         return '!';
 
 .			{ *yytext; }
 

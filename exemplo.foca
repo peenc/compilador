@@ -1,5 +1,6 @@
 int main()
 {	
-	char C
-C = 'a'
+	int I;
+	float F;
+	
 }

@@ -10,12 +10,11 @@ using namespace std;
 
 int var_temp_qnt = 0;
 
-struct atributos
-{	
+typedef struct atributos{	
 	string tipo;
 	string label;
 	string traducao;
-};
+} Atributos;
 
 struct temporario 
 {
@@ -36,23 +35,39 @@ vector<simbolo> tabela_simbolos;
 int yylex(void);
 void yyerror(string);
 string gentempcode();
-struct atributos operacao(struct atributos atr1, struct atributos atr2, string op);
+Atributos operacao(Atributos atr1, Atributos atr2, string op);
 void armazenartemporarios(string var, string tipo);
 string gerarvariavel(string tipo);
+string gerarvariavel_de_usuario(string tipo, string nome);
 void adicionar_simbolo(string nome, string tipo);
+struct simbolo buscar_simbolo(string nome);
 string imprimir_temporarios();
+string imprimir_simbolos();
 string converter_bool_int(string traducao);
+atributos operacao_relacional(atributos atr1, atributos atr2, string op);
+void verificatipo(string atr1nome, string atr2nome);
+string buscar_tipo_simbolo(string nome);
+Atributos operacao_logica(atributos atr1, atributos atr2, string op);
+Atributos operacao_not(atributos atr);
 %}
 
 %token TK_NUM TK_REAL TK_CHAR TK_LOGICO
 %token TK_MAIN TK_ID TK_TIPO_INT TK_TIPO_FLOAT TK_TIPO_BOOLEAN TK_TIPO_CHAR
 %token TK_FIM TK_ERROR
 %token TK_MENOR_IGUAL TK_MAIOR_IGUAL TK_DIFERENTE TK_IGUALDADE
+%token TK_AND TK_OR
+
 
 %start S
 
 %left '+' '-'
 %left '*' '/'
+%left '<' '>' TK_IGUALDADE TK_DIFERENTE TK_MAIOR_IGUAL TK_MENOR_IGUAL
+%left TK_OR
+%left TK_AND
+%right '!'
+
+
 
 
 %%
@@ -65,8 +80,8 @@ S : TK_TIPO_INT TK_MAIN '(' ')' BLOCO
                          "#include<stdio.h>\n"
                          "int main(void) {\n";
           
- 
-        codigo += imprimir_temporarios() +"\n";
+ 		//codigo += imprimir_simbolos() +"\n";
+       	codigo += imprimir_temporarios() +"\n";
         codigo += $5.traducao;
 
         
@@ -97,9 +112,17 @@ COMANDOS	: COMANDO COMANDOS
 			}
 			;
 
-COMANDO 	: E 
+COMANDO 	: E ';'
 			{
 				$$ = $1;
+			}
+			| E
+			{
+				$$ = $1;
+			}
+			| DECLR_TIPO
+			{
+				$$.traducao = "";
 			}
 			;
 
@@ -107,25 +130,81 @@ E 			: ARITMETICO
 			{
 				$$.traducao = $1.traducao;
 			}
-			: RELACIONAL
+			| RELACIONAL
 			{
 				$$.traducao = $1.traducao;
 			}
-    		| TK_ID '=' E
+			| LOGICO
 			{
-				$$.traducao = $1.traducao + $3.traducao + "\t" + $1.label + " = " + $3.label + ";\n" ; //
+				$$.traducao = $1.traducao;
 			}
-    		| TIPOS
+
+			| TK_ID
+			{	
+				struct simbolo sim = buscar_simbolo("uservar_" + $1.label);
+				$$.label = sim.nome;
+				$$.tipo = sim.tipo;
+			}
+    		| TK_ID '=' E
+			{	
+				struct simbolo sim = buscar_simbolo("uservar_" + $1.label);
+				$$.traducao = $3.traducao + "\t" + sim.nome + " = " + $3.label + ";\n";
+
+			}
+    		| TIPO
     		{
     			$$.traducao = $1.traducao;
     		}
+
+    		
+
     		;
+LOGICO		: E TK_AND E
+			{	
+			
+				$$ = operacao_logica($1,$3, "&&");
+			}
+			| E TK_OR E
+			{
+				$$ = operacao_logica($1, $3, "||");
+			}
+			| '!' E
+			{
+	    		$$ = operacao_not($2);
+			}
+
 
 RELACIONAL  : E '<' E
 			{
-				//continuar daqui!!!!!!
+				verificatipo($1.label, $3.label);
+				$$ = operacao_relacional($1, $3, "<");
 			}
-
+			| E '>' E
+			{	
+				verificatipo($1.label, $3.label);
+				$$ = operacao_relacional($1, $3, " > ");
+			}
+			| E TK_IGUALDADE E
+			{
+				verificatipo($1.label, $3.label);
+				$$ = operacao_relacional($1, $3, " == ");
+			}
+			| E TK_DIFERENTE E
+			{
+				verificatipo($1.label, $3.label);
+				$$ = operacao_relacional($1, $3, " != ");
+			}
+			| E TK_MENOR_IGUAL E
+			{
+				verificatipo($1.label, $3.label);
+				$$ = operacao_relacional($1, $3, " <= ");
+			}
+			| E TK_MAIOR_IGUAL E
+			{
+				verificatipo($1.label, $3.label);
+				$$ = operacao_relacional($1, $3, " >= ");
+			}
+			;
 ARITMETICO  : E '+' E
 			{
 				$$ = operacao($1,$3," + ");
@@ -148,7 +227,7 @@ ARITMETICO  : E '+' E
     		}
     		;
 
-TIPOS 		: TK_LOGICO
+TIPO 		: TK_LOGICO
 			{
 				$$.tipo = "bool";
 				$$.label = gerarvariavel($$.tipo);
@@ -173,12 +252,6 @@ TIPOS 		: TK_LOGICO
 				$$.label = gerarvariavel("char");
 				$$.traducao = "\t" + $$.label + " = " + $1.label + ";\n";
 			}
-			| TK_ID
-			{
-				$$.label = gerarvariavel("int");
-				$$.traducao = "\t" + $$.label + " = " + $1.label + ";\n";
-			}
-			
 			| DECLR_TIPO
 			{
 				$$.traducao = $1.traducao;
@@ -186,23 +259,24 @@ TIPOS 		: TK_LOGICO
 			;
 DECLR_TIPO	: TK_TIPO_INT TK_ID
 			{
-				adicionar_simbolo($2.label, "int");
-				$$.label = $2.label;
+				$$.label = gerarvariavel_de_usuario("int", $2.label);
+				adicionar_simbolo($$.label, "int");
 			}
 			| TK_TIPO_FLOAT TK_ID
 			{
-				adicionar_simbolo($2.label, "float");
-				$$.label = $2.label;
+				$$.label = gerarvariavel_de_usuario("float", $2.label);
+				adicionar_simbolo($$.label, "float");
 			}
 			| TK_TIPO_CHAR TK_ID
-			{
-				adicionar_simbolo($2.label, "char");
-				$$.label = $2.label;
+			{				
+				$$.label = gerarvariavel_de_usuario("char", $2.label);
+				adicionar_simbolo($$.label, "char");
 			}
 			| TK_TIPO_BOOLEAN TK_ID
 			{
-				adicionar_simbolo($2.label, "bool");
-				$$.label = $2.label;
+				
+				$$.label = gerarvariavel_de_usuario("bool", $2.label);
+				adicionar_simbolo($$.label, "bool");
 			}
 			;
 
@@ -226,6 +300,49 @@ string gerarvariavel(string tipo)
 	return var;
 }
 
+string gerarvariavel_de_usuario(string tipo, string nome)
+{	
+	string var = "uservar_"+ nome;
+	armazenartemporarios(var, tipo);
+	return var;
+}
+
+void adicionar_simbolo(string nome, string tipo){
+	for(simbolo s : tabela_simbolos){
+		if (s.nome == nome)
+			return yyerror(s.nome + "Variável já declarada!");
+	}
+	tabela_simbolos.push_back({nome,tipo});
+}
+
+string buscar_tipo_simbolo(string nome) {
+	for (simbolo s : tabela_simbolos) {
+		if (s.nome == nome) {
+			return s.tipo;
+		}
+	}
+	return "";
+}
+
+struct simbolo buscar_simbolo(string nome) {
+ 
+    
+	for(int i = 0; i < tabela_simbolos.size(); i++){
+    	if (tabela_simbolos[i].nome == nome) {
+     		return tabela_simbolos[i];
+    	}
+    }
+ 	yyerror("variável" + nome + " não declarada"); 		
+}
+
+string converter_bool_int(string traducao){
+    if(traducao == "true"){
+        return "1";
+    }
+    return "0";
+}
+
+
 void armazenartemporarios(string var, string tipo) {
 	vetortemporarios.push_back({var,tipo});
 	
@@ -246,9 +363,24 @@ string imprimir_temporarios() {
 	return strtemp;
 }
 
+string imprimir_simbolos() {
+	string strtemp;
 
-struct atributos operacao(struct atributos atr1, struct atributos atr2, string op){
-	struct atributos resultado;
+	for (int i = 0; i < tabela_simbolos.size(); i++) {
+		if(tabela_simbolos[i].tipo == "bool"){
+			strtemp += "\tint " + tabela_simbolos[i].nome + ";\n";
+		}
+		else{
+			strtemp += "\t" + tabela_simbolos[i].tipo + " " + tabela_simbolos[i].nome + ";\n";
+		}
+	}
+
+	return strtemp;
+}
+
+
+Atributos operacao(Atributos atr1, Atributos atr2, string op){
+	Atributos resultado;
 
 	resultado.label = gerarvariavel("int");
 	resultado.traducao = atr1.traducao + atr2.traducao + "\t" + resultado.label + " = " + atr1.label + op + atr2.label + ";\n";
@@ -258,20 +390,86 @@ struct atributos operacao(struct atributos atr1, struct atributos atr2, string o
 }
 
 
-void adicionar_simbolo(string nome, string tipo){
-	for(simbolo s : tabela_simbolos){
-		if (s.nome == nome)
-			return yyerror(s.nome + "Variável já declarada!");
+void verificatipo(string atr1nome, string atr2nome){
+	
+	string tipoaux1 = buscar_tipo_simbolo(atr1nome);
+	string tipoaux2 = buscar_tipo_simbolo(atr2nome);
+	
+	if(tipoaux1 == "bool" || tipoaux2 == "bool"){
+		yyerror("não é possível realizar a comparação entre os tipos!");
+
 	}
-	tabela_simbolos.push_back({nome,tipo});
 }
 
-string converter_bool_int(string traducao){
-    if(traducao == "true"){
-        return "1";
-    }
-    return "0";
+atributos operacao_relacional(atributos atr1, atributos atr2, string op) {
+
+	atributos resultado;
+	resultado.tipo = "bool";
+	resultado.label = gerarvariavel("bool");
+
+	resultado.traducao = atr1.traducao + atr2.traducao;
+	resultado.traducao += "\t" + resultado.label + " = " + atr1.label + op + atr2.label + ";\n";
+	
+	
+
+	return resultado;
 }
+
+Atributos operacao_logica(Atributos atr1, Atributos atr2, string op){
+	
+
+	
+	atributos resultado;
+	
+	cout<< atr1.label + "nomezinho dele" << endl;
+	cout<< atr1.tipo + "tipo dele" << endl;
+	
+	if (atr1.tipo != "bool" || atr2.tipo != "bool") {
+		if(op == "&&")
+			yyerror("Operadores '&&' requerem tipos booleanos.");
+		if(op == "||")
+			yyerror("Operadores '||' requerem tipos booleanos.");
+		else
+			yyerror("Operador lógico inválido;");
+	}
+
+	
+
+	resultado.tipo = "bool";
+	resultado.label = gerarvariavel("bool");
+	
+	
+	resultado.traducao =
+        atr1.traducao +
+        atr2.traducao +
+        "\t" + resultado.label + " = " + atr1.label + " " + op + " " + atr2.label + ";\n";
+    
+
+	return resultado;
+	
+
+}
+
+Atributos operacao_not(atributos atr) {
+    
+    string tipoaux = buscar_tipo_simbolo(atr.label);
+	
+    atributos resultado;
+
+    if (tipoaux != "bool") {
+        yyerror("Operador '!' requer tipo booleano.");
+    }
+
+    resultado.tipo = "bool";
+    resultado.label = gerarvariavel("bool");
+    resultado.traducao =
+        atr.traducao +
+        "\t" + resultado.label + " = !" + atr.label + ";\n";
+    return resultado;
+}
+
+
+
 
 int main(int argc, char* argv[])
 {
