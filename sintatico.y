@@ -81,7 +81,7 @@ S : TK_TIPO_INT TK_MAIN '(' ')' BLOCO
                          "#include<stdio.h>\n"
                          "int main(void) {\n";
           
- 		//codigo += imprimir_simbolos() +"\n";
+ 		//codigo += imprimir_simbolos() +"\n";	
        	codigo += imprimir_temporarios() +"\n";
         codigo += $5.traducao;
 
