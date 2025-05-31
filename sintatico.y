@@ -56,6 +56,7 @@ Atributos operacao_not(atributos atr);
 %token TK_FIM TK_ERROR
 %token TK_MENOR_IGUAL TK_MAIOR_IGUAL TK_DIFERENTE TK_IGUALDADE
 %token TK_AND TK_OR
+%token TK_IF TK_ELSE
 
 
 %start S
@@ -65,7 +66,7 @@ Atributos operacao_not(atributos atr);
 %left '<' '>' TK_IGUALDADE TK_DIFERENTE TK_MAIOR_IGUAL TK_MENOR_IGUAL
 %left TK_OR
 %left TK_AND
-%right '!'
+%right TK_NOT
 
 
 
@@ -112,7 +113,15 @@ COMANDOS	: COMANDO COMANDOS
 			}
 			;
 
-COMANDO 	: E ';'
+COMANDO 	: TK_IF '(' E ')' BLOCO
+			{
+				$$.traducao = $3.traducao + "\nif (" + $3.label + ") {\n" + $5.traducao + "}\n";
+			}
+			| TK_IF '(' E ')' BLOCO TK_ELSE BLOCO
+			{
+				$$.traducao = $3.traducao + "\nif (" + $3.label + ") {\n" + $5.traducao + "} else {\n" + $7.traducao + "}\n";
+			}
+			| E ';'
 			{
 				$$ = $1;
 			}
@@ -192,7 +201,7 @@ LOGICO		: E TK_AND E
 RELACIONAL  : E '<' E
 			{
 				verificatipo($1.label, $3.label);
-				$$ = operacao_relacional($1, $3, "<");
+				$$ = operacao_relacional($1, $3, " < ");
 			}
 			| E '>' E
 			{	

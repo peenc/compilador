@@ -29,6 +29,9 @@ ID {LETRA}({LETRA}|{NUM})*
 
 "char"		{return TK_TIPO_CHAR;}
 
+"if"        { return TK_IF; }
+"else"      { return TK_ELSE; }
+
 
 [(){}[\];,]	{ return *yytext; }
 
@@ -39,7 +42,7 @@ ID {LETRA}({LETRA}|{NUM})*
 [<]         { return *yytext; }
 [>]         { return *yytext; }
 "<="        { yylval.traducao = " <= "; return TK_MENOR_IGUAL; }
-">="        { yylval.traducao = " => "; return TK_MAIOR_IGUAL; }
+">="        { yylval.traducao = " >= "; return TK_MAIOR_IGUAL; }
 "!="        { yylval.traducao = " != "; return TK_DIFERENTE; }
 "=="        { yylval.traducao = " == "; return TK_IGUALDADE; }
 
@@ -52,9 +55,9 @@ ID {LETRA}({LETRA}|{NUM})*
 {ID}		{ yylval.label = yytext; return TK_ID; }
 {CHAR}		{ yylval.label = yytext; return TK_CHAR; }
 
-"&&"        return TK_AND;
-"||"        return TK_OR;
-"!"         return '!';
+"&&"        {return TK_AND;}
+"||"        {return TK_OR;}
+"!"         {return TK_NOT;}
 
 .			{ *yytext; }
 
