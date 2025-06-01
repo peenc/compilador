@@ -115,11 +115,22 @@ COMANDOS	: COMANDO COMANDOS
 
 COMANDO 	: TK_IF '(' E ')' BLOCO
 			{
-				$$.traducao = $3.traducao + "\nif (" + $3.label + ") {\n" + $5.traducao + "}\n";
+				string lbl = gentempcode();
+				$$.traducao = $3.traducao;
+				$$.traducao += "\tif (!" + $3.label + ") goto " + lbl + ";\n";
+				$$.traducao += $5.traducao;
+				$$.traducao += lbl + ":\n";
 			}
 			| TK_IF '(' E ')' BLOCO TK_ELSE BLOCO
 			{
-				$$.traducao = $3.traducao + "\nif (" + $3.label + ") {\n" + $5.traducao + "} else {\n" + $7.traducao + "}\n";
+				string lbl_else = gentempcode();
+				string lbl_end = gentempcode();
+				$$.traducao = $3.traducao;
+				$$.traducao += "\tif (!" + $3.label + ") goto " + lbl_else + ";\n";
+				$$.traducao += $5.traducao;
+				$$.traducao += "\tgoto " + lbl_end + ";\n";
+				$$.traducao += lbl_else + ":\n" + $7.traducao;
+				$$.traducao += lbl_end + ":\n";
 			}
 			| E ';'
 			{
