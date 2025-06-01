@@ -3,6 +3,8 @@
 #include <string>
 #include <sstream>
 #include <vector> 
+#include <map>
+#include <stack>
 
 #define YYSTYPE atributos
 
@@ -22,33 +24,50 @@ struct temporario
 	string tipo;
 };
 
-struct simbolo{
-	string nome;
-	string tipo;
+struct simbolo {
+    string nome;  
+    string tipo;           
+    string nome_interno;   
 };
 
+
+vector<simbolo> tabela_global;
 vector<temporario> vetortemporarios;
 int capacidade_temporarios = 100;
-vector<simbolo> tabela_simbolos;
+vector<map<string, simbolo>> pilhaDeTabelas;
+int contadorEscopo = 0;
+stack<int> pilhaEscopos;
+vector<string> nomesDosEscopos;
 
 
 int yylex(void);
 void yyerror(string);
+void adiciona_tabela_global(struct atributos variavel);
+simbolo* busca_tabela_global(const string& nome);
+bool existe_variavel_no_escopo_atual(const string& nome);
+string imprime_tabela_global();
+void abrir_escopo();
+void fechar_escopo();
 string gentempcode();
 Atributos operacao(Atributos atr1, Atributos atr2, string op);
 void armazenartemporarios(string var, string tipo);
 string gerarvariavel(string tipo);
-string gerarvariavel_de_usuario(string tipo, string nome);
-void adicionar_simbolo(string nome, string tipo);
-struct simbolo buscar_simbolo(string nome);
+string gerarvariavel_de_usuario(const string& tipo, const string& nomeOriginal);
+void adicionar_simbolo(string nome_original, string nome_interno, string tipo);
+simbolo buscar_simbolo(const string& nome_original);
+simbolo buscar_simbolo_por_interno(const string& nome_interno);
 string imprimir_temporarios();
-string imprimir_simbolos();
+string imprimir_simbolos_escopo_atual();
 string converter_bool_int(string traducao);
 atributos operacao_relacional(atributos atr1, atributos atr2, string op);
 void verificatipo(string atr1nome, string atr2nome);
-string buscar_tipo_simbolo(string nome);
+string buscar_tipo_simbolo(const string& nome);
 Atributos operacao_logica(atributos atr1, atributos atr2, string op);
 Atributos operacao_not(atributos atr);
+void verificaOperacao(atributos atr1, atributos atr2, string op);
+Atributos verificaCoercao(Atributos &atr1, Atributos &atr2);
+Atributos converteTipo(Atributos variavel);
+bool tipoInvalidoParaOperacao(string tipo);
 %}
 
 %token TK_NUM TK_REAL TK_CHAR TK_LOGICO
@@ -61,47 +80,64 @@ Atributos operacao_not(atributos atr);
 
 %start S
 
-%left '+' '-'
-%left '*' '/'
-%left '<' '>' TK_IGUALDADE TK_DIFERENTE TK_MAIOR_IGUAL TK_MENOR_IGUAL
 %left TK_OR
 %left TK_AND
-%right TK_NOT
+%left TK_IGUALDADE TK_DIFERENTE
+%left '<' '>' TK_MENOR_IGUAL TK_MAIOR_IGUAL
+%left '+' '-'
+%left '*' '/'
+%right '!'
+
 
 
 
 
 %%
+S 		: INICIO	
+		{
+			$$ = $1; 
+		}
 
-S : TK_TIPO_INT TK_MAIN '(' ')' BLOCO
-    {
-        string codigo = "/*Compilador FOCA*/\n"
-                         "#include <iostream>\n"
-                         "#include<string.h>\n"
-                         "#include<stdio.h>\n"
-                         "int main(void) {\n";
-          
- 		//codigo += imprimir_simbolos() +"\n";	
-       	codigo += imprimir_temporarios() +"\n";
-        codigo += $5.traducao;
-
-        
-        codigo += "\treturn 0;\n"
-                  "\n}"; // Fechamento de main
-		
-        cout << codigo << endl;
+INICIO 	: DECLR_TIPO ';' INICIO
+		{
+			
+		}
+		| MAIN 
+		;
 
 
-    }
+MAIN :  TK_TIPO_INT TK_MAIN '(' ')' BLOCO
+		{
+		    string codigo = "/*Compilador FOCA*/\n"
+		                    "#include <iostream>\n"
+		                    "#include<string.h>\n"
+		                    "#include<stdio.h>\n";
+
+		    codigo += imprime_tabela_global() + "\n";
+		    codigo += "int main(void) {\n";
+		    codigo += imprimir_simbolos_escopo_atual() + "\n";
+		    codigo += imprimir_temporarios() + "\n";
+
+		    codigo += $5.traducao;
+
+		    codigo += "\treturn 0;\n}\n";
+
+		    cout << codigo << endl;
+		}
+		;
+
+
+
+
+BLOCO : '{'
+ 			{ abrir_escopo();}
+  		COMANDOS 
+		'}' 
+  			{ fechar_escopo();
+        $$.traducao = $3.traducao;
+        }
 ;
 
-
-
-BLOCO		: '{' COMANDOS '}'
-			{
-				$$.traducao = $2.traducao;
-			}
-			;
 
 COMANDOS	: COMANDO COMANDOS
 			{
@@ -113,25 +149,40 @@ COMANDOS	: COMANDO COMANDOS
 			}
 			;
 
-COMANDO 	: TK_IF '(' E ')' BLOCO
+
+COMANDO 	:TK_IF '(' E ')' BLOCO
 			{
-				string lbl = gentempcode();
-				$$.traducao = $3.traducao;
-				$$.traducao += "\tif (!" + $3.label + ") goto " + lbl + ";\n";
-				$$.traducao += $5.traducao;
-				$$.traducao += lbl + ":\n";
+			    string lbl = gentempcode();
+			    // Tradução da expressão do if
+			    $$.traducao = $3.traducao;
+			    // Se a condição for falsa, pula para lbl (fim do bloco)
+			    $$.traducao += "\tif (!" + $3.label + ") goto " + lbl + ";\n";
+			    // Tradução do bloco do if
+			    $$.traducao += $5.traducao;
+			    // Label para continuar após o if
+			    $$.traducao += lbl + ":\n";
 			}
+
 			| TK_IF '(' E ')' BLOCO TK_ELSE BLOCO
 			{
-				string lbl_else = gentempcode();
-				string lbl_end = gentempcode();
-				$$.traducao = $3.traducao;
-				$$.traducao += "\tif (!" + $3.label + ") goto " + lbl_else + ";\n";
-				$$.traducao += $5.traducao;
-				$$.traducao += "\tgoto " + lbl_end + ";\n";
-				$$.traducao += lbl_else + ":\n" + $7.traducao;
-				$$.traducao += lbl_end + ":\n";
+			    string lbl_else = gentempcode();
+			    string lbl_end = gentempcode();
+			    // Tradução da expressão do if
+			    $$.traducao = $3.traducao;
+			    // Se a condição for falsa, pula para o else
+			    $$.traducao += "\tif (!" + $3.label + ") goto " + lbl_else + ";\n";
+			    // Tradução do bloco do if
+			    $$.traducao += $5.traducao;
+			    // Pula para o fim após o bloco if
+			    $$.traducao += "\tgoto " + lbl_end + ";\n";
+			    // Label do else
+			    $$.traducao += lbl_else + ":\n";
+			    // Tradução do bloco else
+			    $$.traducao += $7.traducao;
+			    // Label do fim
+			    $$.traducao += lbl_end + ":\n";
 			}
+
 			| E ';'
 			{
 				$$ = $1;
@@ -160,17 +211,24 @@ E 			: ARITMETICO
 			}
 
 			| TK_ID
-			{	
-				struct simbolo sim = buscar_simbolo("uservar_" + $1.label);
-				$$.label = sim.nome;
-				$$.tipo = sim.tipo;
-			}
-    		| TK_ID '=' E
-			{	
-				struct simbolo sim = buscar_simbolo("uservar_" + $1.label);
-				$$.traducao = $3.traducao + "\t" + sim.nome + " = " + $3.label + ";\n";
+			    {
+			        struct simbolo sim = buscar_simbolo($1.label);
+			        $$.label = sim.nome_interno;
+			        $$.tipo = sim.tipo;
+			        $$.traducao = "";
+			    }
+  			| TK_ID '=' E
+		    {
+		        struct simbolo sim = buscar_simbolo($1.label);
+		        if (sim.tipo == "") {
+		            yyerror(("Variável não declarada: " + std::string($1.label)).c_str());
+		        }
+		        $$.traducao = $3.traducao + "\t" + sim.nome_interno + " = " + $3.label + ";\n";
+		        $$.label = sim.nome_interno;
+		        $$.tipo = sim.tipo;
+		    }
 
-			}
+
 			| '(' CAST ')' E 
 			{
 				$$.tipo = $2.tipo;
@@ -212,7 +270,7 @@ LOGICO		: E TK_AND E
 RELACIONAL  : E '<' E
 			{
 				verificatipo($1.label, $3.label);
-				$$ = operacao_relacional($1, $3, " < ");
+				$$ = operacao_relacional($1, $3, "<");
 			}
 			| E '>' E
 			{	
@@ -292,34 +350,78 @@ TIPOS 		: TK_LOGICO
 				$$.traducao = $1.traducao;
 			}
 			;
-DECLR_TIPO	: TK_TIPO_INT TK_ID
+DECLR_TIPO : TK_TIPO_INT TK_ID
 			{
-				$$.label = gerarvariavel_de_usuario("int", $2.label);
-				adicionar_simbolo($$.label, "int");
+			    string nome_original = $2.label;  // ou $2.valor, depende do seu token
+			    string nome_interno = gerarvariavel_de_usuario("int", nome_original);
+			    adicionar_simbolo(nome_original, nome_interno, "int");
+			    $$.label = nome_interno;
+			    $$.traducao = "\tint " + nome_interno + ";\n";
+			 
 			}
-			| TK_TIPO_FLOAT TK_ID
-			{
-				$$.label = gerarvariavel_de_usuario("float", $2.label);
-				adicionar_simbolo($$.label, "float");
-			}
-			| TK_TIPO_CHAR TK_ID
-			{				
-				$$.label = gerarvariavel_de_usuario("char", $2.label);
-				adicionar_simbolo($$.label, "char");
-			}
-			| TK_TIPO_BOOLEAN TK_ID
-			{
-				
-				$$.label = gerarvariavel_de_usuario("bool", $2.label);
-				adicionar_simbolo($$.label, "bool");
-			}
-			;
+
+          	| TK_TIPO_FLOAT TK_ID
+            {
+                string nome_original = $2.label;
+                string nome_interno = gerarvariavel_de_usuario("float", nome_original);
+                adicionar_simbolo(nome_original, nome_interno, "float");
+                $$.label = nome_interno;
+                 $$.traducao = "\tfloat " + nome_interno + ";\n";
+            }
+          | TK_TIPO_CHAR TK_ID
+            {
+                string nome_original = $2.label;
+                string nome_interno = gerarvariavel_de_usuario("char", nome_original);
+                adicionar_simbolo(nome_original, nome_interno, "char");
+                $$.label = nome_interno;
+                 $$.traducao = "\tchar " + nome_interno + ";\n";
+                
+            }
+          | TK_TIPO_BOOLEAN TK_ID
+            {
+                string nome_original = $2.label;
+                string nome_interno = gerarvariavel_de_usuario("bool", nome_original);
+                adicionar_simbolo(nome_original, nome_interno, "bool");
+                $$.label = nome_interno;
+                $$.traducao = "\tint " + nome_interno + ";\n";
+                
+            }
+;
+
+
+
 
 %%
 
 #include "lex.yy.c"
 
 int yyparse();
+
+void abrir_escopo() {
+    pilhaDeTabelas.push_back(map<string, simbolo>());
+    nomesDosEscopos.push_back("escopo_" + to_string(contadorEscopo++));
+}
+
+// Fechar escopo
+void fechar_escopo() {
+    if (!pilhaDeTabelas.empty()) {
+        pilhaDeTabelas.pop_back();
+        nomesDosEscopos.pop_back();
+    }
+}
+
+string obter_nome_escopo_atual() {
+    if (pilhaDeTabelas.empty()) {
+        return "global";
+    } else {
+        return nomesDosEscopos.back();
+    }
+}
+
+string gerarvariavel_de_usuario(const string& tipo, const string& nomeOriginal) {
+    string nomeInterno = "uservar_" + nomeOriginal + "_" + to_string(contadorEscopo);
+    return nomeInterno;
+}
 
 string gentempcode()
 {
@@ -335,40 +437,79 @@ string gerarvariavel(string tipo)
 	return var;
 }
 
-string gerarvariavel_de_usuario(string tipo, string nome)
-{	
-	string var = "uservar_"+ nome;
-	armazenartemporarios(var, tipo);
-	return var;
+bool existe_variavel_no_escopo_atual(const string& nome) {
+    return !pilhaDeTabelas.empty() && pilhaDeTabelas.back().count(nome) > 0;
 }
-
-void adicionar_simbolo(string nome, string tipo){
-	for(simbolo s : tabela_simbolos){
-		if (s.nome == nome)
-			return yyerror(s.nome + "Variável já declarada!");
-	}
-	tabela_simbolos.push_back({nome,tipo});
-}
-
-string buscar_tipo_simbolo(string nome) {
-	for (simbolo s : tabela_simbolos) {
-		if (s.nome == nome) {
-			return s.tipo;
-		}
-	}
-	return "";
-}
-
-struct simbolo buscar_simbolo(string nome) {
- 
-    
-	for(int i = 0; i < tabela_simbolos.size(); i++){
-    	if (tabela_simbolos[i].nome == nome) {
-     		return tabela_simbolos[i];
-    	}
+void adicionar_simbolo(string nome_original, string nome_interno, string tipo) {
+    if (pilhaDeTabelas.empty()) {
+        cout << "Erro: nenhum escopo aberto.\n";
+        exit(1);
     }
- 	yyerror("variável" + nome + " não declarada"); 		
+
+    auto& escopo_atual = pilhaDeTabelas.back();
+
+    if (escopo_atual.count(nome_original)) {
+        cout << "Erro: variável '" << nome_original << "' já declarada no escopo atual.\n";
+        exit(1);
+    }
+
+    simbolo s;
+    s.nome = nome_original;
+    s.nome_interno = nome_interno;
+    s.tipo = tipo;
+
+    escopo_atual[nome_original] = s;
 }
+
+simbolo buscar_simbolo(const string& nome_original) {
+    for (auto it = pilhaDeTabelas.rbegin(); it != pilhaDeTabelas.rend(); ++it) {
+        if (it->count(nome_original)) {
+            return it->at(nome_original);
+        }
+    }
+
+    cout << "Erro: variável '" << nome_original << "' não declarada.\n";
+    exit(1);
+}
+
+
+simbolo buscar_simbolo_por_interno(const string& nome_interno) {
+    // Procura nas tabelas de símbolos
+    for (auto it = pilhaDeTabelas.rbegin(); it != pilhaDeTabelas.rend(); ++it) {
+        for (auto& par : *it) {
+            if (par.second.nome_interno == nome_interno) {
+                return par.second;
+            }
+        }
+    }
+
+    // Procura nos temporários
+    for (auto& temp : vetortemporarios) {
+        if (temp.var == nome_interno) {
+            simbolo simbolo_temp;
+            simbolo_temp.nome_interno = nome_interno;
+            simbolo_temp.tipo = temp.tipo;
+            return simbolo_temp;
+        }
+    }
+
+    cout << "Erro: símbolo '" << nome_interno << "' não encontrado.\n";
+    exit(1);
+}
+
+
+string buscar_tipo_simbolo(const string& nome) {
+    for (auto it = pilhaDeTabelas.rbegin(); it != pilhaDeTabelas.rend(); ++it) {
+        if (it->count(nome)) {
+            return it->at(nome).tipo;
+        }
+    }
+
+    cout << "Erro: tipo da variável '" << nome << "' não encontrado.\n";
+    exit(1);
+}
+
+
 
 string converter_bool_int(string traducao){
     if(traducao == "true"){
@@ -398,46 +539,136 @@ string imprimir_temporarios() {
 	return strtemp;
 }
 
-string imprimir_simbolos() {
-	string strtemp;
+string imprime_tabela_global() {
+    stringstream ss;
+    ss << "\n";
+    if (!pilhaDeTabelas.empty()) {
+        auto& escopo_global = pilhaDeTabelas.front();
+        for (auto& par : escopo_global) {
+            ss << par.second.tipo << " " << par.second.nome_interno << ";\n";
+        }
+    }
+    return ss.str();
+}
 
-	for (int i = 0; i < tabela_simbolos.size(); i++) {
-		if(tabela_simbolos[i].tipo == "bool"){
-			strtemp += "\tint " + tabela_simbolos[i].nome + ";\n";
+
+
+string imprimir_simbolos_escopo_atual() {
+    stringstream ss;
+   
+    if (pilhaDeTabelas.size() > 1) {
+        auto& escopo = pilhaDeTabelas.back();
+        for (auto& par : escopo) {
+            ss << "\t" << par.second.tipo << " " << par.second.nome_interno
+               << " (nome original: " << par.second.nome << ")\n";
+        }
+    }
+    return ss.str();
+}
+
+
+
+void verificaOperacao(Atributos atr1, Atributos atr2, string op){
+	
+	if(atr1.tipo == "bool" || atr2.tipo == "bool"){
+		
+		if(op == " + " || op == " - " || op == " * " || op == " / "){
+			yyerror("Não é possivel realizar essa operação aritimetica com boleanos: " + atr1.label + " " + op + " " +atr2.label );
 		}
-		else{
-			strtemp += "\t" + tabela_simbolos[i].tipo + " " + tabela_simbolos[i].nome + ";\n";
+		if(op == " < " || op == " > " || op == " <= " || op == " >= "){
+			yyerror("Não é possivel realizar essa operação relacionais com boleanos: " + atr1.label + " " + op + " " +atr2.label );
 		}
 	}
+}
+Atributos operacao(Atributos atr1, Atributos atr2, std::string op) {
+    Atributos resultado, var;
 
-	return strtemp;
+    // Verificar se operação é válida
+    verificaOperacao(atr1, atr2, op);
+
+    // Debug dos operandos
+    printf("DEBUG -> atr1.tipo: %s | atr2.tipo: %s | op: %s\n",
+           atr1.tipo.c_str(), atr2.tipo.c_str(), op.c_str());
+
+    // Verificar coerção de tipos
+    var = verificaCoercao(atr1, atr2);
+
+    // Debug da coerção
+    printf("DEBUG verificaCoercao -> tipo: %s | label: %s | traducao: %s\n",
+           var.tipo.c_str(), var.label.c_str(), var.traducao.c_str());
+
+    // Gerar label para o resultado
+    resultado.label = gerarvariavel(var.tipo);
+    resultado.tipo = var.tipo;
+
+    // Construir código de tradução
+    resultado.traducao = var.traducao +
+                          "\t" + resultado.label + " = " + atr1.label + " " + op + " " + atr2.label + ";\n";
+
+    // Debug do resultado
+    printf("DEBUG resultado -> tipo: %s | label: %s | traducao:\n%s\n",
+           resultado.tipo.c_str(),
+           resultado.label.c_str(),
+           resultado.traducao.c_str());
+
+    return resultado;
+}
+
+bool tipoInvalidoParaOperacao(string tipo) {
+    return tipo == "char" || tipo == "bool";
+}
+
+Atributos converteTipo(Atributos variavel) {
+    Atributos var;
+    var.label = gerarvariavel("float");
+    var.tipo = "float";
+    var.traducao = variavel.traducao + "\t" + var.label + " = (float) " + variavel.label + ";\n";
+    return var;
+}
+
+Atributos verificaCoercao(Atributos &atr1, Atributos &atr2) {
+    Atributos var;
+
+    if (tipoInvalidoParaOperacao(atr1.tipo) || tipoInvalidoParaOperacao(atr2.tipo)) {
+        yyerror(("Não é possível realizar essa operação entre " 
+                 + atr1.tipo + " e " + atr2.tipo).c_str());
+    }
+
+    if (atr1.tipo != atr2.tipo) {
+        if (atr1.tipo == "int" && atr2.tipo == "float") {
+            atr1 = converteTipo(atr1);
+        } else if (atr1.tipo == "float" && atr2.tipo == "int") {
+            atr2 = converteTipo(atr2);
+        } else {
+            yyerror(("Tipos incompatíveis: " + atr1.tipo + " e " + atr2.tipo).c_str());
+        }
+    }
+
+    var.tipo = atr1.tipo;
+    var.traducao = atr1.traducao + atr2.traducao;
+    var.label = "";
+
+    return var;
 }
 
 
-Atributos operacao(Atributos atr1, Atributos atr2, string op){
-	Atributos resultado;
 
-	resultado.label = gerarvariavel("int");
-	resultado.traducao = atr1.traducao + atr2.traducao + "\t" + resultado.label + " = " + atr1.label + op + atr2.label + ";\n";
 
-	return resultado;
+void verificatipo(string atr1nome, string atr2nome) {
+    simbolo sim1 = buscar_simbolo_por_interno(atr1nome);
+    simbolo sim2 = buscar_simbolo_por_interno(atr2nome);
 
+    if (sim1.tipo == "bool" || sim2.tipo == "bool") {
+        cout << "Erro de tipos entre '" << sim1.nome_interno << "' (tipo " << sim1.tipo << ")"
+             << " e '" << sim2.nome_interno << "' (tipo " << sim2.tipo << ").\n";
+        yyerror("Não é possível realizar a operação entre tipos booleanos.");
+    }
 }
 
-
-void verificatipo(string atr1nome, string atr2nome){
-	
-	string tipoaux1 = buscar_tipo_simbolo(atr1nome);
-	string tipoaux2 = buscar_tipo_simbolo(atr2nome);
-	
-	if(tipoaux1 == "bool" || tipoaux2 == "bool"){
-		yyerror("não é possível realizar a comparação entre os tipos!");
-
-	}
-}
 
 atributos operacao_relacional(atributos atr1, atributos atr2, string op) {
 
+	verificaOperacao(atr1,atr2,op);
 	atributos resultado;
 	resultado.tipo = "bool";
 	resultado.label = gerarvariavel("bool");
@@ -451,13 +682,7 @@ atributos operacao_relacional(atributos atr1, atributos atr2, string op) {
 }
 
 Atributos operacao_logica(Atributos atr1, Atributos atr2, string op){
-	
-
-	
 	atributos resultado;
-	
-	cout<< atr1.label + "nomezinho dele" << endl;
-	cout<< atr1.tipo + "tipo dele" << endl;
 	
 	if (atr1.tipo != "bool" || atr2.tipo != "bool") {
 		if(op == "&&")
@@ -467,8 +692,6 @@ Atributos operacao_logica(Atributos atr1, Atributos atr2, string op){
 		else
 			yyerror("Operador lógico inválido;");
 	}
-
-	
 
 	resultado.tipo = "bool";
 	resultado.label = gerarvariavel("bool");
@@ -481,41 +704,40 @@ Atributos operacao_logica(Atributos atr1, Atributos atr2, string op){
     
 
 	return resultado;
-	
-
 }
 
 Atributos operacao_not(atributos atr) {
-    
-    string tipoaux = buscar_tipo_simbolo(atr.label);
-	
-    atributos resultado;
+    simbolo sim = buscar_simbolo_por_interno(atr.label);
 
-    if (tipoaux != "bool") {
+    if (sim.tipo != "bool") {
         yyerror("Operador '!' requer tipo booleano.");
     }
 
+    atributos resultado;
     resultado.tipo = "bool";
     resultado.label = gerarvariavel("bool");
     resultado.traducao =
         atr.traducao +
         "\t" + resultado.label + " = !" + atr.label + ";\n";
+
     return resultado;
 }
 
 
 
 
-int main(int argc, char* argv[])
-{
-	var_temp_qnt = 0;
-	yyparse();
-	
-	return 0;
+int main(int argc, char* argv[]) {
+    var_temp_qnt = 0;
+    abrir_escopo();   // <--- Aqui abre o escopo global
+
+    yyparse();
+
+    fechar_escopo();  // <--- Fecha escopo global
+    return 0;
 }
 
 void yyerror(string MSG)
 {
 	cout << MSG << endl;
 	exit (0);
-}				
+}	
