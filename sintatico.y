@@ -70,8 +70,8 @@ Atributos converteTipo(Atributos variavel);
 bool tipoInvalidoParaOperacao(string tipo);
 %}
 
-%token TK_NUM TK_REAL TK_CHAR TK_LOGICO
-%token TK_MAIN TK_ID TK_TIPO_INT TK_TIPO_FLOAT TK_TIPO_BOOLEAN TK_TIPO_CHAR
+%token TK_NUM TK_REAL TK_CHAR TK_LOGICO TK_STRING
+%token TK_MAIN TK_ID TK_TIPO_INT TK_TIPO_FLOAT TK_TIPO_BOOLEAN TK_TIPO_CHAR TK_TIPO_STRING
 %token TK_FIM TK_ERROR
 %token TK_MENOR_IGUAL TK_MAIOR_IGUAL TK_DIFERENTE TK_IGUALDADE
 %token TK_AND TK_OR
@@ -218,15 +218,24 @@ E 			: ARITMETICO
 			        $$.traducao = "";
 			    }
   			| TK_ID '=' E
-		    {
-		        struct simbolo sim = buscar_simbolo($1.label);
-		        if (sim.tipo == "") {
-		            yyerror(("Variável não declarada: " + std::string($1.label)).c_str());
-		        }
-		        $$.traducao = $3.traducao + "\t" + sim.nome_interno + " = " + $3.label + ";\n";
-		        $$.label = sim.nome_interno;
-		        $$.tipo = sim.tipo;
-		    }
+			{
+			    struct simbolo sim = buscar_simbolo($1.label);
+			    if (sim.tipo == "") {
+			        yyerror(("Variável não declarada: " + string($1.label)).c_str());
+			    }
+
+			    if (sim.tipo == "string") {
+			        // Para string, gera strcpy(destino, fonte);
+			        $$.traducao = $3.traducao + "\tstrcpy(" + sim.nome_interno + ", " + $3.label + ");\n";
+			    } else {
+			        // Para outros tipos, atribuição direta
+			        $$.traducao = $3.traducao + "\t" + sim.nome_interno + " = " + $3.label + ";\n";
+			    }
+
+			    $$.label = sim.nome_interno;
+			    $$.tipo = sim.tipo;
+			}
+
 
 
 			| '(' CAST ')' E 
@@ -345,6 +354,13 @@ TIPOS 		: TK_LOGICO
 				$$.label = gerarvariavel("char");
 				$$.traducao = "\t" + $$.label + " = " + $1.label + ";\n";
 			}
+			| TK_STRING
+  			{
+			    $$.tipo = "string";
+			    $$.label = gerarvariavel("string");
+			    $$.traducao += "\tstrcpy(" + $$.label + ", " + $1.label + ");\n";
+  			}
+
 			| DECLR_TIPO
 			{
 				$$.traducao = $1.traducao;
@@ -368,7 +384,7 @@ DECLR_TIPO : TK_TIPO_INT TK_ID
                 $$.label = nome_interno;
                  $$.traducao = "\tfloat " + nome_interno + ";\n";
             }
-          | TK_TIPO_CHAR TK_ID
+          	| TK_TIPO_CHAR TK_ID
             {
                 string nome_original = $2.label;
                 string nome_interno = gerarvariavel_de_usuario("char", nome_original);
@@ -377,7 +393,7 @@ DECLR_TIPO : TK_TIPO_INT TK_ID
                  $$.traducao = "\tchar " + nome_interno + ";\n";
                 
             }
-          | TK_TIPO_BOOLEAN TK_ID
+          	| TK_TIPO_BOOLEAN TK_ID
             {
                 string nome_original = $2.label;
                 string nome_interno = gerarvariavel_de_usuario("bool", nome_original);
@@ -386,7 +402,16 @@ DECLR_TIPO : TK_TIPO_INT TK_ID
                 $$.traducao = "\tint " + nome_interno + ";\n";
                 
             }
-;
+            DECLR_TIPO : TK_TIPO_STRING TK_ID
+			{
+			    string nome_original = $2.label;
+			    string nome_interno = gerarvariavel_de_usuario("string", nome_original);
+			    adicionar_simbolo(nome_original, nome_interno, "string");
+			    $$.label = nome_interno;
+			    $$.traducao = "\tchar " + nome_interno + "[256];\n";  // <- Aqui!
+			}
+
+;	
 
 
 
@@ -525,19 +550,23 @@ void armazenartemporarios(string var, string tipo) {
 }
 
 string imprimir_temporarios() {
-	string strtemp;
+    string strtemp;
 
-	for (int i = 0; i < vetortemporarios.size(); i++) {
-		if(vetortemporarios[i].tipo == "bool"){
-			strtemp += "\tint " + vetortemporarios[i].var + ";\n";
-		}
-		else{
-			strtemp += "\t" + vetortemporarios[i].tipo + " " + vetortemporarios[i].var + ";\n";
-		}
-	}
+    for (int i = 0; i < vetortemporarios.size(); i++) {
+        if (vetortemporarios[i].tipo == "bool") {
+            strtemp += "\tint " + vetortemporarios[i].var + ";\n";
+        }
+        else if (vetortemporarios[i].tipo == "string") {
+            strtemp += "\tchar " + vetortemporarios[i].var + "[256];\n";  // só isso para string
+        }
+        else {
+            strtemp += "\t" + vetortemporarios[i].tipo + " " + vetortemporarios[i].var + ";\n";
+        }
+    }
 
-	return strtemp;
+    return strtemp;
 }
+
 
 string imprime_tabela_global() {
     stringstream ss;
@@ -545,11 +574,18 @@ string imprime_tabela_global() {
     if (!pilhaDeTabelas.empty()) {
         auto& escopo_global = pilhaDeTabelas.front();
         for (auto& par : escopo_global) {
-            ss << par.second.tipo << " " << par.second.nome_interno << ";\n";
+            if (par.second.tipo == "string") {
+                ss << "char " << par.second.nome_interno << "[256];\n";
+            } else if (par.second.tipo == "bool") {
+                ss << "int " << par.second.nome_interno << ";\n";
+            } else {
+                ss << par.second.tipo << " " << par.second.nome_interno << ";\n";
+            }
         }
     }
     return ss.str();
 }
+
 
 
 

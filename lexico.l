@@ -12,6 +12,8 @@ NUM {DIGITO}+
 REAL {NUM}+("."{NUM}+)?
 CHAR \'({LETRA}|{NUM})\'
 ID {LETRA}({LETRA}|{NUM})*
+STRING \"([^\\\"]|\\.)*\"
+
 
 %%
 
@@ -29,6 +31,8 @@ ID {LETRA}({LETRA}|{NUM})*
 
 "char"		{return TK_TIPO_CHAR;}
 
+"string"    { return TK_TIPO_STRING; }
+
 "if"        { return TK_IF; }
 
 "else"      { return TK_ELSE; }
@@ -42,10 +46,11 @@ ID {LETRA}({LETRA}|{NUM})*
 
 [<]         { return *yytext; }
 [>]         { return *yytext; }
-"<="        { yylval.traducao = " <= "; return TK_MENOR_IGUAL; }
-">="        { yylval.traducao = " => "; return TK_MAIOR_IGUAL; }
-"!="        { yylval.traducao = " != "; return TK_DIFERENTE; }
-"=="        { yylval.traducao = " == "; return TK_IGUALDADE; }
+"<="        { return TK_MENOR_IGUAL; }
+">="        { return TK_MAIOR_IGUAL; }
+"!="        { return TK_DIFERENTE; }
+"=="        { return TK_IGUALDADE; }
+
 
 
 "true"   	{ yylval.traducao = "true"; return TK_LOGICO; }
@@ -55,6 +60,11 @@ ID {LETRA}({LETRA}|{NUM})*
 {REAL}		{ yylval.label = yytext; return TK_REAL; }
 {ID}		{ yylval.label = yytext; return TK_ID; }
 {CHAR}		{ yylval.label = yytext; return TK_CHAR; }
+{STRING} {
+    std::string str(yytext);
+    yylval.label = "\"" + str.substr(1, str.size() - 2) + "\"";
+    return TK_STRING;
+}
 
 "&&"        return TK_AND;
 "||"        return TK_OR;
