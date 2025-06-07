@@ -68,6 +68,7 @@ void verificaOperacao(atributos atr1, atributos atr2, string op);
 Atributos verificaCoercao(Atributos &atr1, Atributos &atr2);
 Atributos converteTipo(Atributos variavel);
 bool tipoInvalidoParaOperacao(string tipo);
+Atributos verificaTiposAtribuicao(string tipoVar, Atributos expr);
 %}
 
 %token TK_NUM TK_REAL TK_CHAR TK_LOGICO TK_STRING
@@ -224,16 +225,16 @@ E 			: ARITMETICO
 			        yyerror(("Variável não declarada: " + string($1.label)).c_str());
 			    }
 
-			    if (sim.tipo == "string") {
-			        // Para string, gera strcpy(destino, fonte);
-			        $$.traducao = $3.traducao + "\tstrcpy(" + sim.nome_interno + ", " + $3.label + ");\n";
-			    } else {
-			        // Para outros tipos, atribuição direta
-			        $$.traducao = $3.traducao + "\t" + sim.nome_interno + " = " + $3.label + ";\n";
-			    }
+			    Atributos exprCorrigido = verificaTiposAtribuicao(sim.tipo, $3);
 
-			    $$.label = sim.nome_interno;
-			    $$.tipo = sim.tipo;
+				if (sim.tipo == "string") {
+				    $$.traducao = exprCorrigido.traducao + "\tstrcpy(" + sim.nome_interno + ", " + exprCorrigido.label + ");\n";
+				} else {
+				    $$.traducao = exprCorrigido.traducao + "\t" + sim.nome_interno + " = " + exprCorrigido.label + ";\n";
+				}
+
+				$$.label = sim.nome_interno;
+				$$.tipo = sim.tipo;
 			}
 
 
@@ -414,8 +415,6 @@ DECLR_TIPO : TK_TIPO_INT TK_ID
 ;	
 
 
-
-
 %%
 
 #include "lex.yy.c"
@@ -535,7 +534,7 @@ string buscar_tipo_simbolo(const string& nome) {
 }
 
 
-
+// converte bool para int
 string converter_bool_int(string traducao){
     if(traducao == "true"){
         return "1";
@@ -586,9 +585,6 @@ string imprime_tabela_global() {
     return ss.str();
 }
 
-
-
-
 string imprimir_simbolos_escopo_atual() {
     stringstream ss;
    
@@ -606,49 +602,62 @@ string imprimir_simbolos_escopo_atual() {
 
 void verificaOperacao(Atributos atr1, Atributos atr2, string op){
 	
+	// verificação para bool
 	if(atr1.tipo == "bool" || atr2.tipo == "bool"){
-		
 		if(op == " + " || op == " - " || op == " * " || op == " / "){
-			yyerror("Não é possivel realizar essa operação aritimetica com boleanos: " + atr1.label + " " + op + " " +atr2.label );
+			yyerror("Não é possivel realizar essa operação aritmética com booleanos: " + atr1.label + " " + op + " " + atr2.label );
 		}
 		if(op == " < " || op == " > " || op == " <= " || op == " >= "){
-			yyerror("Não é possivel realizar essa operação relacionais com boleanos: " + atr1.label + " " + op + " " +atr2.label );
+			yyerror("Não é possivel realizar essa operação relacional com booleanos: " + atr1.label + " " + op + " " + atr2.label );
+		}
+	}
+
+	// verificação para string
+	if(atr1.tipo == "string" || atr2.tipo == "string"){
+		// Se for +, permitimos apenas se ambos forem string
+		if(op == " + "){
+			if(atr1.tipo != "string" || atr2.tipo != "string"){
+				yyerror("Só é possível concatenar strings com strings.");
+			}
+			// concatenação permitida
+		}
+		else {
+			// qualquer outro operador é inválido com strings
+			yyerror("Operação '" + op + "' não é permitida com strings ");
 		}
 	}
 }
+
 Atributos operacao(Atributos atr1, Atributos atr2, std::string op) {
     Atributos resultado, var;
 
     // Verificar se operação é válida
     verificaOperacao(atr1, atr2, op);
 
-    // Debug dos operandos
-    printf("DEBUG -> atr1.tipo: %s | atr2.tipo: %s | op: %s\n",
-           atr1.tipo.c_str(), atr2.tipo.c_str(), op.c_str());
-
     // Verificar coerção de tipos
     var = verificaCoercao(atr1, atr2);
-
-    // Debug da coerção
-    printf("DEBUG verificaCoercao -> tipo: %s | label: %s | traducao: %s\n",
-           var.tipo.c_str(), var.label.c_str(), var.traducao.c_str());
 
     // Gerar label para o resultado
     resultado.label = gerarvariavel(var.tipo);
     resultado.tipo = var.tipo;
 
     // Construir código de tradução
-    resultado.traducao = var.traducao +
-                          "\t" + resultado.label + " = " + atr1.label + " " + op + " " + atr2.label + ";\n";
+    resultado.traducao = var.traducao;
 
-    // Debug do resultado
-    printf("DEBUG resultado -> tipo: %s | label: %s | traducao:\n%s\n",
-           resultado.tipo.c_str(),
-           resultado.label.c_str(),
-           resultado.traducao.c_str());
+    if (resultado.tipo == "string" && op == " + ") {
+        // concatenação de string: usar strcpy + strcat
+        resultado.traducao +=
+            "\tstrcpy(" + resultado.label + ", " + atr1.label + ");\n" +
+            "\tstrcat(" + resultado.label + ", " + atr2.label + ");\n";
+    } else {
+        // operação normal para tipos não string
+        resultado.traducao +=
+            "\t" + resultado.label + " = " + atr1.label + " " + op + " " + atr2.label + ";\n";
+    }
 
     return resultado;
 }
+
 
 bool tipoInvalidoParaOperacao(string tipo) {
     return tipo == "char" || tipo == "bool";
@@ -686,8 +695,6 @@ Atributos verificaCoercao(Atributos &atr1, Atributos &atr2) {
 
     return var;
 }
-
-
 
 
 void verificatipo(string atr1nome, string atr2nome) {
@@ -759,6 +766,45 @@ Atributos operacao_not(atributos atr) {
     return resultado;
 }
 
+Atributos verificaTiposAtribuicao(string tipoVar, Atributos expr) {
+    Atributos resultado = expr;
+
+    if (tipoVar == expr.tipo) {
+        return resultado;
+    }
+
+    // conversão int -> float (permitida)
+    if (tipoVar == "float" && expr.tipo == "int") {
+        resultado = converteTipo(expr);
+        return resultado;
+    }
+
+    // conversão float -> int (permitida, mas gera cast explícito)
+    if (tipoVar == "int" && expr.tipo == "float") {
+        resultado.label = gerarvariavel("int");
+        resultado.tipo = "int";
+        resultado.traducao = expr.traducao +
+                             "\t" + resultado.label + " = (int) " + expr.label + ";\n";
+        return resultado;
+    }
+
+    // não pode conversão com bool
+    if (tipoVar == "bool" || expr.tipo == "bool") {
+        yyerror(("Não é permitido atribuir valores entre tipos booleanos e outros tipos: '"
+                 + tipoVar + "' e '" + expr.tipo + "'").c_str());
+    }
+
+    // não pode conversão com string
+    if (tipoVar == "string" || expr.tipo == "string") {
+        yyerror(("Não é permitido atribuir valores entre tipos string e outros tipos: '"
+                 + tipoVar + "' e '" + expr.tipo + "'").c_str());
+    }
+
+    yyerror(("Tipos incompatíveis na atribuição: variável do tipo '" + tipoVar +
+             "' e expressão do tipo '" + expr.tipo + "'").c_str());
+
+    return resultado;
+}
 
 
 

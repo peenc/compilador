@@ -1,6 +1,14 @@
 
 int main()
 {	
-	string i;
-	i = "lennon bobao";
+	string a;
+	int i;
+	i = 1;
+
+	if(i > 0){
+		a = "1 é maior que 0";
+	}else{
+		a = "1 é menor que 0";
+	}
+
 }
