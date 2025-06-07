@@ -37,6 +37,11 @@ STRING \"([^\\\"]|\\.)*\"
 
 "else"      { return TK_ELSE; }
 
+"print"      { return TK_PRINT; }
+
+"read"       { return TK_READ; }
+
+
 
 [(){}[\];,]	{ return *yytext; }
 

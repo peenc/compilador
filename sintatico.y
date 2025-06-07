@@ -77,6 +77,7 @@ Atributos verificaTiposAtribuicao(string tipoVar, Atributos expr);
 %token TK_MENOR_IGUAL TK_MAIOR_IGUAL TK_DIFERENTE TK_IGUALDADE
 %token TK_AND TK_OR
 %token TK_IF TK_ELSE
+%token TK_PRINT TK_READ
 
 
 %start S
@@ -183,6 +184,66 @@ COMANDO 	:TK_IF '(' E ')' BLOCO
 			    // Label do fim
 			    $$.traducao += lbl_end + ":\n";
 			}
+
+			|TK_PRINT '(' E ')' ';'
+		    {
+		        // Se for string, usar %s
+		        if ($3.tipo == "string") {
+		            $$.traducao = $3.traducao +
+		                          "\tprintf(\"%s\\n\", " + $3.label + ");\n";
+		        }
+		        // Se for int
+		        else if ($3.tipo == "int") {
+		            $$.traducao = $3.traducao +
+		                          "\tprintf(\"%d\\n\", " + $3.label + ");\n";
+		        }
+		        // Se for float
+		        else if ($3.tipo == "float") {
+		            $$.traducao = $3.traducao +
+		                          "\tprintf(\"%f\\n\", " + $3.label + ");\n";
+		        }
+		        // Se for char
+		        else if ($3.tipo == "char") {
+		            $$.traducao = $3.traducao +
+		                          "\tprintf(\"%c\\n\", " + $3.label + ");\n";
+		        }
+		        // Se for bool
+		        else if ($3.tipo == "bool") {
+		            $$.traducao = $3.traducao +
+		                          "\tprintf(\"%s\\n\", " + $3.label + " ? \"true\" : \"false\");\n";
+		        }
+		        else {
+		            yyerror(("Não é possível imprimir o tipo " + $3.tipo).c_str());
+		        }
+		    }
+
+		    | TK_READ '(' TK_ID ')' ';'
+		    {
+		        struct simbolo sim = buscar_simbolo($3.label);
+
+		        if (sim.tipo == "") {
+		            yyerror(("Variável não declarada: " + string($3.label)).c_str());
+		        }
+
+		        if (sim.tipo == "string") {
+		            $$.traducao = "\tscanf(\"%s\", " + sim.nome_interno + ");\n";
+		        }
+		        else if (sim.tipo == "int") {
+		            $$.traducao = "\tscanf(\"%d\", &" + sim.nome_interno + ");\n";
+		        }
+		        else if (sim.tipo == "float") {
+		            $$.traducao = "\tscanf(\"%f\", &" + sim.nome_interno + ");\n";
+		        }
+		        else if (sim.tipo == "char") {
+		            $$.traducao = "\tscanf(\" %c\", &" + sim.nome_interno + ");\n";
+		        }
+		        else if (sim.tipo == "bool") {
+		            yyerror("Não é possível fazer leitura de tipo booleano.");
+		        }
+		        else {
+		            yyerror(("Não é possível ler o tipo " + sim.tipo).c_str());
+		        }
+		    }
 
 			| E ';'
 			{
