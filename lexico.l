@@ -1,6 +1,7 @@
 %{
 #include <string>
-
+// Adicione a inclusão do arquivo de parser gerado pelo Bison
+#include "y.tab.h" 
 %}
 
 ESPACO [ \t]
@@ -14,41 +15,28 @@ CHAR \'({LETRA}|{NUM})\'
 ID {LETRA}({LETRA}|{NUM})*
 STRING \"([^\\\"]|\\.)*\"
 
-
 %%
 
 "\n"		{}
-
 {DELIM} 	{}
 
 "main"		{return TK_MAIN;}
-
 "int"		{return TK_TIPO_INT;}
-
 "float"		{return TK_TIPO_FLOAT;}
-
 "bool"		{return TK_TIPO_BOOLEAN;}
-
 "char"		{return TK_TIPO_CHAR;}
-
 "string"    { return TK_TIPO_STRING; }
-
 "if"        { return TK_IF; }
-
 "else"      { return TK_ELSE; }
 
-"print"      { return TK_PRINT; }
+"while"     { return TK_WHILE; } /* <-- LINHA ADICIONADA */
 
-"read"       { return TK_READ; }
-
-
+"print"     { return TK_PRINT; }
+"read"      { return TK_READ; }
 
 [(){}[\];,]	{ return *yytext; }
-
 [+\-*/]		{ return *yytext; }
-
 "="		    { return '='; }
-
 [<]         { return *yytext; }
 [>]         { return *yytext; }
 "<="        { return TK_MENOR_IGUAL; }
@@ -56,10 +44,8 @@ STRING \"([^\\\"]|\\.)*\"
 "!="        { return TK_DIFERENTE; }
 "=="        { return TK_IGUALDADE; }
 
-
-
-"true"   	{ yylval.traducao = "true"; return TK_LOGICO; }
-"false"   	{ yylval.traducao = "false"; return TK_LOGICO; }
+"true"  	{ yylval.traducao = "true"; return TK_LOGICO; }
+"false" 	{ yylval.traducao = "false"; return TK_LOGICO; }
 
 {NUM}		{ yylval.label = yytext; return TK_NUM; }
 {REAL}		{ yylval.label = yytext; return TK_REAL; }

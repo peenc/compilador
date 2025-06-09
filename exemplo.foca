@@ -2,8 +2,12 @@
 int main()
 {	
 	int i;
-	i = 1;
+	i = 7;
+	i = i + 1;
 	float a; 
 	a = 0.5
-	print(a);
+	while(i > 0){
+		print(i);
+		i = i - 1
+	}
 }

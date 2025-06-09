@@ -76,7 +76,7 @@ Atributos verificaTiposAtribuicao(string tipoVar, Atributos expr);
 %token TK_FIM TK_ERROR
 %token TK_MENOR_IGUAL TK_MAIOR_IGUAL TK_DIFERENTE TK_IGUALDADE
 %token TK_AND TK_OR
-%token TK_IF TK_ELSE
+%token TK_IF TK_ELSE TK_WHILE
 %token TK_PRINT TK_READ
 
 
@@ -184,7 +184,29 @@ COMANDO 	:TK_IF '(' E ')' BLOCO
 			    // Label do fim
 			    $$.traducao += lbl_end + ":\n";
 			}
+			| TK_WHILE '(' E ')' BLOCO
+			{
+				string lbl_inicio = gentempcode();
+				string lbl_fim = gentempcode();
 
+				// 1. Label para o início do laço (antes da condição)
+				$$.traducao = lbl_inicio + ":\n";
+
+				// 2. Código para avaliar a expressão condicional
+				$$.traducao += $3.traducao;
+
+				// 3. Se a condição for falsa, salta para fora do laço
+				$$.traducao += "\tif (!" + $3.label + ") goto " + lbl_fim + ";\n";
+
+				// 4. Código do corpo do laço
+				$$.traducao += $5.traducao;
+
+				// 5. Salto incondicional de volta ao início para reavaliar a condição
+				$$.traducao += "\tgoto " + lbl_inicio + ";\n";
+
+				// 6. Label para o fim do laço
+				$$.traducao += lbl_fim + ":\n";
+			}
 			|TK_PRINT '(' E ')' ';'
 		    {
 		        // Se for string, usar %s
