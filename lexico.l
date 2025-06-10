@@ -41,9 +41,32 @@ STRING \"([^\\\"]|\\.)*\"
 
 "read"       { return TK_READ; }
 
+"for"      { return TK_FOR; }
+
+"while"    {return TK_WHILE;}
+
+"do"    {return TK_DO;}
+
+"break"     {  return TK_BREAK; }
+
+"continue"     { return TK_CONTINUE; }
+
+"switch"    {  return TK_SWITCH; }
+
+"case"  { return TK_CASE; }
+
+"default" {  return TK_DEFAULT; }
 
 
-[(){}[\];,]	{ return *yytext; }
+"("    {  return '('; }
+")"    {  return ')'; }
+"{"    {  return '{'; }
+"}"    {  return '}'; }
+":"    {  return ':'; }
+";"    {  return ';'; }
+","    {  return ','; }
+"["    {  return '['; }
+"]"    {  return ']'; }
 
 [+\-*/]		{ return *yytext; }
 
@@ -63,7 +86,7 @@ STRING \"([^\\\"]|\\.)*\"
 
 {NUM}		{ yylval.label = yytext; return TK_NUM; }
 {REAL}		{ yylval.label = yytext; return TK_REAL; }
-{ID}		{ yylval.label = yytext; return TK_ID; }
+{ID}		{  yylval.label = yytext; return TK_ID; }
 {CHAR}		{ yylval.label = yytext; return TK_CHAR; }
 {STRING} {
     std::string str(yytext);
@@ -75,6 +98,7 @@ STRING \"([^\\\"]|\\.)*\"
 "||"        return TK_OR;
 "!"         return '!';
 
-.			{ *yytext; }
+. { return *yytext; }
+
 
 %%
