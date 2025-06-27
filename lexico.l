@@ -57,6 +57,10 @@ STRING \"([^\\\"]|\\.)*\"
 
 "default" {  return TK_DEFAULT; }
 
+"matriz"    {return TK_MATRIX;}
+
+"vector"    {return TK_VECTOR;}
+
 
 "("    {  return '('; }
 ")"    {  return ')'; }

@@ -62,6 +62,24 @@ struct ContextoControle {
     string lbl_incremento; 
 };
 
+struct elemento_matriz {
+    string nome_matriz;
+    string nome;       // apelido ou temporário que guarda o valor?
+    string pos_linha;  // variável temporária para índice linha
+    string pos_coluna; // variável temporária para índice coluna
+};
+
+struct matriz {
+    string nome;        // nome original da matriz
+    string apelido;     // nome interno (apelido) da matriz, ex: t3
+    string tipo;        // tipo da matriz (int, float...)
+    string tam_linha;   // variável/valor com tamanho da linha
+    string tam_coluna;  // variável/valor com tamanho da coluna
+};
+
+vector<matriz> matrizes;
+
+
 vector<ContextoControle> controle_stack;
 
 vector<loop> loops;
@@ -112,13 +130,16 @@ Atributos converteTipo(Atributos variavel);
 bool tipoInvalidoParaOperacao(string tipo);
 Atributos verificaTiposAtribuicao(string tipoVar, Atributos expr);
 loop criar_contexto_loop(bool tem_incremento);
-switchcase criar_contexto_switch();
+switchcase criar_contexto_switch();string puxa_apelido_matriz(const string& nome_original);
+void verifica_posicao_elemento_matriz(const string& nome_matriz, const string& pos_linha, const string& pos_coluna);
+matriz buscar_matriz(const string& nome);
+void adiciona_matriz(string nome_original, string apelido, string tipo, string tam_linha, string tam_coluna);
 
 
 
 %}
 
-%token TK_NUM TK_REAL TK_CHAR TK_LOGICO TK_STRING
+%token TK_NUM TK_REAL TK_CHAR TK_LOGICO TK_STRING 
 %token TK_MAIN TK_ID TK_TIPO_INT TK_TIPO_FLOAT TK_TIPO_BOOLEAN TK_TIPO_CHAR TK_TIPO_STRING
 %token TK_FIM TK_ERROR
 %token TK_MENOR_IGUAL TK_MAIOR_IGUAL TK_DIFERENTE TK_IGUALDADE
@@ -127,7 +148,7 @@ switchcase criar_contexto_switch();
 %token TK_PRINT TK_READ
 %token TK_BREAK TK_CONTINUE
 %token TK_FOR TK_WHILE TK_DO
-%token TK_SWITCH TK_CASE TK_DEFAULT
+%token TK_SWITCH TK_CASE TK_DEFAULT TK_MATRIX TK_VECTOR 
 
 %start S
 
@@ -164,7 +185,8 @@ MAIN :  TK_TIPO_INT TK_MAIN '(' ')' BLOCO
 		    string codigo = "/*Compilador FOCA*/\n"
 		                    "#include <iostream>\n"
 		                    "#include<string.h>\n"
-		                    "#include<stdio.h>\n";
+		                    "#include<stdio.h>\n"
+		                    "#include<stdlib.h>\n";
     
 		    codigo += imprime_tabela_global() + "\n";
 		    codigo += "int main(void) {\n";
@@ -235,6 +257,62 @@ COMANDO 	: E ';'
 		    }
 		 	;
 
+MATRIZ : TK_MATRIX TIPO TK_ID '[' TK_NUM ']' '[' TK_NUM ']'
+			{
+			    bool b = existe_variavel_no_escopo_atual($3.label);
+			    if (b) {
+			        yyerror("variável " + $3.label + " já declarada");
+			    }
+
+			    $$.label = $3.label;
+			    $$.tipo = $2.tipo;
+
+			    if ($2.tipo == "string") {
+			        yyerror("matriz de strings não suportada");
+			    }
+
+			    string apelido = gerarvariavel_de_usuario($2.tipo, $3.label);
+			    string tam_linha = $5.label;
+			    string tam_coluna = $8.label;
+
+			    adicionar_simbolo($$.label, "matrix", apelido);
+			    adiciona_matriz($$.label, apelido, $$.tipo, tam_linha, tam_coluna);
+
+			    if ($2.tipo == "bool") {
+			        $$.traducao = "\tint " + apelido + "[" + tam_linha + "][" + tam_coluna + "];\n";
+			    } else {
+			        $$.traducao = "\t" + $2.tipo + " " + apelido + "[" + tam_linha + "][" + tam_coluna + "];\n";
+			    }
+			}
+
+
+
+VETOR : TK_VECTOR TIPO TK_ID '[' TK_NUM ']'
+		{
+		    if (existe_variavel_no_escopo_atual($3.label)) {
+		        yyerror("variável " + $3.label + " já declarada");
+		    }
+
+		    $$.label = $3.label;
+		    $$.tipo = $2.tipo;
+
+		    if ($2.tipo == "string") {
+		        yyerror("vetor de strings não suportado");
+		    }
+
+		    string apelido = gerarvariavel_de_usuario($2.tipo, $3.label);
+		    string tamanho = $5.label;
+
+		    adicionar_simbolo($$.label, "vector", apelido);
+		    adiciona_matriz($$.label, apelido, $$.tipo, "1", tamanho); // vetor como matriz 1xN
+
+		    if ($2.tipo == "bool") {
+		        $$.traducao = "\tint " + apelido + "[" + tamanho + "];\n";
+		    } else {
+		        $$.traducao = "\t" + $2.tipo + " " + apelido + "[" + tamanho + "];\n";
+		    }
+		}
+
 CONDICIONAL :TK_IF '(' E ')' BLOCO
 			{
 			    string lbl = gentempcodeif();
@@ -257,27 +335,26 @@ CONDICIONAL :TK_IF '(' E ')' BLOCO
 			    $$.traducao += lbl_end + ":\n";
 			};
 
-IN_OUT       :TK_PRINT '(' E ')' ';'
+IN_OUT       
+		    : TK_PRINT '(' E ')' ';'
 		    {
+		        $$.traducao = $3.traducao;
+
 		        if ($3.tipo == "string") {
-		            $$.traducao = $3.traducao +
-		                          "\tprintf(\"%s\\n\", " + $3.label + ");\n";
+		            $$.traducao += "\tprintf(\"%s\\n\", " + $3.label + ");\n";
 		        }
-		        else if ($3.tipo == "int") {
-		            $$.traducao = $3.traducao +
-		                          "\tprintf(\"%d\\n\", " + $3.label + ");\n";
+		        else if ($3.tipo == "int" || $3.tipo == "bool") {
+		            if ($3.tipo == "bool") {
+		                $$.traducao += "\tprintf(\"%s\\n\", " + $3.label + " ? \"true\" : \"false\");\n";
+		            } else {
+		                $$.traducao += "\tprintf(\"%d\\n\", " + $3.label + ");\n";
+		            }
 		        }
 		        else if ($3.tipo == "float") {
-		            $$.traducao = $3.traducao +
-		                          "\tprintf(\"%f\\n\", " + $3.label + ");\n";
+		            $$.traducao += "\tprintf(\"%f\\n\", " + $3.label + ");\n";
 		        }
 		        else if ($3.tipo == "char") {
-		            $$.traducao = $3.traducao +
-		                          "\tprintf(\"%c\\n\", " + $3.label + ");\n";
-		        }
-		        else if ($3.tipo == "bool") {
-		            $$.traducao = $3.traducao +
-		                          "\tprintf(\"%s\\n\", " + $3.label + " ? \"true\" : \"false\");\n";
+		            $$.traducao += "\tprintf(\"%c\\n\", " + $3.label + ");\n";
 		        }
 		        else {
 		            yyerror(("Não é possível imprimir o tipo " + $3.tipo).c_str());
@@ -310,8 +387,8 @@ IN_OUT       :TK_PRINT '(' E ')' ';'
 		        else {
 		            yyerror(("Não é possível ler o tipo " + sim.tipo).c_str());
 		        }
-		    }
-		    ;
+		    };
+
 REPETICAO : TK_FOR '(' ATRIBUICAO ';' RELACIONAL ';' E ')' CONTEXTO_FOR BLOCO
 			{
 			    string inicio_loop = $9.inicio_loop;
@@ -547,61 +624,165 @@ JUMP	 : TK_BREAK ';'
 		}
 		;
 
-E 			: ARITMETICO
+E 		: ARITMETICO
+		{
+		    $$.tipo = $1.tipo;
+		    $$.label = $1.label;
+		    $$.traducao = $1.traducao;
+		}
+		| RELACIONAL
+		{
+		    $$.tipo = $1.tipo;
+		    $$.label = $1.label;
+		    $$.traducao = $1.traducao;
+		}
+		| LOGICO
+		{
+		    $$.tipo = $1.tipo;
+		    $$.label = $1.label;
+		    $$.traducao = $1.traducao;
+		}
+		| ATRIBUICAO
+		{
+		    $$.tipo = $1.tipo;
+		    $$.label = $1.label;
+		    $$.traducao = $1.traducao;
+		}
+		| MATRIZ
+		{
+		    $$.tipo = $1.tipo;
+		    $$.label = $1.label;
+		    $$.traducao = $1.traducao;
+		}
+		| VETOR
+		{
+		    $$.tipo = $1.tipo;
+		    $$.label = $1.label;
+		    $$.traducao = $1.traducao;
+		}
+		| TIPOS
+		{
+		    $$.tipo = $1.tipo;
+		    $$.label = $1.label;
+		    $$.traducao = $1.traducao;
+		}
+		| TK_ID
+		{
+		    simbolo sim = buscar_simbolo($1.label);
+		    $$.tipo = sim.tipo;
+		    $$.label = sim.nome_interno;
+		    $$.traducao = "";
+		}
+		| '(' CAST ')' E
+		{
+		    $$.tipo = $2.tipo;
+		    $$.label = gerarvariavel($$.tipo);
+		    $$.traducao = $4.traducao + "\t" + $$.label + " = (" + $2.tipo + ") " + $4.label + ";\n";
+		}
+		| TK_ID '[' E ']' '[' E ']'
+		{
+		    matriz m = buscar_matriz($1.label);
+		    string apelido = m.apelido;
+		    
+		    string linha = gerarvariavel("int");    // correto!
+		    string coluna = gerarvariavel("int");   // correto!
+		    string temp = gerarvariavel(m.tipo);    // correto!
+
+		    $$.tipo = m.tipo;
+		    $$.label = temp;
+
+		    $$.traducao = $3.traducao + $5.traducao;
+		    $$.traducao += "\t" + linha + " = " + $3.label + ";\n";
+		    $$.traducao += "\t" + coluna + " = " + $6.label + ";\n";
+
+		    verifica_posicao_elemento_matriz($1.label, linha, coluna);
+		    $$.traducao += "\t" + temp + " = " + apelido + "[" + linha + "][" + coluna + "];\n";
+		}
+		;
+
+ATRIBUICAO
+		    : TK_ID '=' E
+		    {
+		        struct simbolo sim = buscar_simbolo($1.label);
+		        if (sim.tipo == "") {
+		            yyerror(("Variável não declarada: " + string($1.label)).c_str());
+		        }
+
+		        Atributos exprCorrigido = verificaTiposAtribuicao(sim.tipo, $3);
+
+		        if (sim.tipo == "string") {
+		            $$.traducao = exprCorrigido.traducao + "\tstrcpy(" + sim.nome_interno + ", " + exprCorrigido.label + ");\n";
+		        } else {
+		            $$.traducao = exprCorrigido.traducao + "\t" + sim.nome_interno + " = " + exprCorrigido.label + ";\n";
+		        }
+
+		        $$.label = sim.nome_interno;
+		        $$.tipo = sim.tipo;
+		    }
+		    | TK_ID '[' TK_NUM ']' '=' E
 			{
-				$$.traducao = $1.traducao;
-			}
-			| RELACIONAL
-			{
-				$$.traducao = $1.traducao;
-			}
-			| LOGICO
-			{
-				$$.traducao = $1.traducao;
-			}
-			| ATRIBUICAO
-			{
-				$$.traducao = $1.traducao;
-			}
-			| TK_ID
-			    {
-			        struct simbolo sim = buscar_simbolo($1.label);
-			        $$.label = sim.nome_interno;
-			        $$.tipo = sim.tipo;
-			        $$.traducao = "";
+			    matriz m = buscar_matriz($1.label);
+			    string apelido = m.apelido;
+
+			    string indice = gerarvariavel("int");
+			    string valor = gerarvariavel(m.tipo);
+
+			    $$.traducao = "";
+			    $$.traducao += "\t" + indice + " = " + $3.label + ";\n";
+			    $$.traducao += $6.traducao;
+			    $$.traducao += "\t" + valor + " = " + $6.label + ";\n";
+
+			    if ($6.tipo != m.tipo) {
+			        cerr << "Debug: valor tipo = " << $6.tipo << ", vetor tipo = " << m.tipo << endl;
+			        yyerror(("tipo incompatível na atribuição ao vetor " + string($1.label)).c_str());
 			    }
-			| '(' CAST ')' E 
-			{
-				$$.tipo = $2.tipo;
-				$$.label = gerarvariavel($$.tipo);
-				$$.traducao = $4.traducao + "\t" + $$.label + " = (" + $2.tipo + ") " + $4.label + ";\n";			
-			}
-    				
 
-    		| TIPOS
-    		{
-    			$$.traducao = $1.traducao;
-    		}
-    		;
+			    verifica_posicao_elemento_matriz($1.label, "1", indice);
 
-ATRIBUICAO	: TK_ID '=' E
-			{
-			    struct simbolo sim = buscar_simbolo($1.label);
-			    if (sim.tipo == "") {
-			        yyerror(("Variável não declarada: " + string($1.label)).c_str());
+			    if (m.tipo == "string") {
+			        $$.traducao += "\tstrcpy(" + apelido + "[" + indice + "], " + valor + ");\n";
+			    } else {
+			        $$.traducao += "\t" + apelido + "[" + indice + "] = " + valor + ";\n";
 			    }
 
-			    Atributos exprCorrigido = verificaTiposAtribuicao(sim.tipo, $3);
-
-				if (sim.tipo == "string") {
-				    $$.traducao = exprCorrigido.traducao + "\tstrcpy(" + sim.nome_interno + ", " + exprCorrigido.label + ");\n";
-				} else {
-				    $$.traducao = exprCorrigido.traducao + "\t" + sim.nome_interno + " = " + exprCorrigido.label + ";\n";
-				}
-
-				$$.label = sim.nome_interno;
-				$$.tipo = sim.tipo;
+			    $$.label = apelido;
+			    $$.tipo = m.tipo;
 			}
+
+    		| TK_ID '[' E ']' '[' E ']' '=' E
+			{
+			    matriz m = buscar_matriz($1.label);
+			    string apelido = m.apelido;
+
+			    string linha = gerarvariavel("int");
+			    string coluna = gerarvariavel("int");
+			    string valor = gerarvariavel(m.tipo);
+
+			    $$.traducao = "";
+			    $$.traducao += "\t" + linha + " = " + $3.label + ";\n";
+			    $$.traducao += "\t" + coluna + " = " + $6.label + ";\n";
+			    $$.traducao += $9.traducao;
+			    $$.traducao += "\t" + valor + " = " + $9.label + ";\n";
+
+			    if ($9.tipo != m.tipo) {
+			        cerr << "Debug: valor tipo = " << $9.tipo << ", matriz tipo = " << m.tipo << endl;
+			        yyerror(("tipo incompatível na atribuição à matriz " + string($1.label)).c_str());
+			    }
+
+			    verifica_posicao_elemento_matriz($1.label, linha, coluna);
+
+			    if (m.tipo == "string") {
+			        // Para string, usa strcpy
+			        $$.traducao += "\tstrcpy(" + apelido + "[" + linha + "][" + coluna + "], " + valor + ");\n";
+			    } else {
+			        // Para tipos primitivos, atribuição direta
+			        $$.traducao += "\t" + apelido + "[" + linha + "][" + coluna + "] = " + valor + ";\n";
+			    }
+
+			    $$.label = apelido;
+			    $$.tipo = m.tipo;
+			}
+			;
 
 CAST 		: TK_TIPO_INT
 			{
@@ -706,11 +887,11 @@ TIPOS 		: TK_LOGICO
 				$$.traducao = "\t" + $$.label + " = " + $1.label + ";\n";
 			}
 			| TK_STRING
-  			{
+			{
 			    $$.tipo = "string";
-			    $$.label = gerarvariavel("string");
+			    $$.label = gerarvariavel("string"); // ex: t1
 			    $$.traducao += "\tstrcpy(" + $$.label + ", " + $1.label + ");\n";
-  			}
+			}
 
 			| DECLR_TIPO
 			{
@@ -753,16 +934,24 @@ DECLR_TIPO : TK_TIPO_INT TK_ID
                 $$.traducao = "\tint " + nome_interno + ";\n";
                 
             }
-            DECLR_TIPO : TK_TIPO_STRING TK_ID
+          DECLR_TIPO : TK_TIPO_STRING TK_ID
 			{
 			    string nome_original = $2.label;
 			    string nome_interno = gerarvariavel_de_usuario("string", nome_original);
 			    adicionar_simbolo(nome_original, nome_interno, "string");
 			    $$.label = nome_interno;
-			    $$.traducao = "\tchar " + nome_interno + "[256];\n";  // <- Aqui!
+
+			    $$.traducao = "\tchar* " + nome_interno + " = (char*) malloc(256 * sizeof(char));\n";
 			}
 
+
 ;	
+TIPO : TK_TIPO_INT    { $$.tipo = "int"; }
+     | TK_TIPO_FLOAT  { $$.tipo = "float"; }
+     | TK_TIPO_BOOLEAN   { $$.tipo = "bool"; }
+     | TK_TIPO_CHAR   { $$.tipo = "char"; }
+     | TK_TIPO_STRING { $$.tipo = "string"; }
+     ;
 
 
 %%
@@ -921,7 +1110,7 @@ string imprimir_temporarios() {
             strtemp += "\tint " + vetortemporarios[i].var + ";\n";
         }
         else if (vetortemporarios[i].tipo == "string") {
-            strtemp += "\tchar " + vetortemporarios[i].var + "[256];\n";  // só isso para string
+            strtemp += "\tchar* " + vetortemporarios[i].var + " = (char*) malloc(256 * sizeof(char));\n";
         }
         else {
             strtemp += "\t" + vetortemporarios[i].tipo + " " + vetortemporarios[i].var + ";\n";
@@ -1215,7 +1404,51 @@ switchcase criar_contexto_switch() {
 
     return ctx;
 }
+void adiciona_matriz(string nome_original, string apelido, string tipo, string tam_linha, string tam_coluna) {
+    // Verifica se já existe
+    for (auto& m : matrizes) {
+        if (m.nome == nome_original) {
+            cout << "Erro: matriz '" << nome_original << "' já declarada.\n";
+            exit(1);
+        }
+    }
 
+    matriz m;
+    m.nome = nome_original;
+    m.apelido = apelido;
+    m.tipo = tipo;
+    m.tam_linha = tam_linha;
+    m.tam_coluna = tam_coluna;
+
+    matrizes.push_back(m);
+}
+
+matriz buscar_matriz(const string& nome) {
+    for (auto& m : matrizes) {
+        if (m.nome == nome) return m;
+    }
+
+    cout << "Erro: matriz '" << nome << "' não declarada.\n";
+    exit(1);
+}
+
+void verifica_posicao_elemento_matriz(const string& nome_matriz, const string& pos_linha, const string& pos_coluna) {
+    matriz m = buscar_matriz(nome_matriz);
+
+    // Aqui você pode gerar código intermediário para checar limites, por exemplo:
+    // if (pos_linha >= m.tam_linha) error
+    // if (pos_coluna >= m.tam_coluna) error
+    // Mas para simplicidade, apenas imprima ou armazene essa lógica para análise futura
+
+    // Exemplo (pseudo código para gerar código intermediário):
+    cout << "/* verificar se " << pos_linha << " < " << m.tam_linha << " */\n";
+    cout << "/* verificar se " << pos_coluna << " < " << m.tam_coluna << " */\n";
+}
+
+string puxa_apelido_matriz(const string& nome_original) {
+    matriz m = buscar_matriz(nome_original);
+    return m.apelido;
+}
 
 
 
