@@ -30,6 +30,7 @@ STRING \"([^\\\"]|\\.)*\"
 "if"       { return TK_IF; }
 "else"     { return TK_ELSE; }
 "print"    { return TK_PRINT; }
+"println"   return TK_PRINTLN;
 "read"     { return TK_READ; }
 "for"      { return TK_FOR; }
 "while"    { return TK_WHILE; }
@@ -41,6 +42,8 @@ STRING \"([^\\\"]|\\.)*\"
 "default"  { return TK_DEFAULT; }
 "matriz"   { return TK_MATRIX; }
 "vector"   { return TK_VECTOR; }
+"return"   { return TK_RETURN; }
+"void" {return TK_VOID;}
 
 "(" { return '('; }
 ")" { return ')'; }

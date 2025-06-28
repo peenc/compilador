@@ -18,18 +18,23 @@ typedef struct atributos{
 	string tipo;
 	string label;
 	string traducao;
-	string inicio_loop;  // adiciona essa linha
-    string fim_loop;     // e essa linha
+	string funcoes;  
+	string inicio_loop;  
+    string fim_loop;     
     string incremento_loop;
-    string ifs;           // códigos dos ifs que testam os valores do switch
-    string blocks;        // códigos dos blocos que executam os cases
-    string default_block; // bloco do default (se houver)
+    string ifs;           
+    string blocks;        
+    string default_block;
+    vector<string> parametros;  
+    vector<string> tipos;   
 } Atributos;
 
 struct temporario 
 {
 	string var;
 	string tipo;
+	string escopo; 
+
 };
 
 struct simbolo {
@@ -61,17 +66,30 @@ struct ContextoControle {
     string lbl_incremento; 
 };
 
+struct Funcao {
+    string nome;
+    string nome_interno;
+    string tipo_retorno;
+    vector<string> parametros; // tipos dos parâmetros
+};
+
+Funcao expr_funcao_atual;
+vector<Funcao> tabelaFuncoes;
+int contador_func = 0;
+vector<string> declaracoes_funcoes; 
+
+
 struct elemento_matriz {
     string nome_matriz;
-    string nome;       // apelido ou temporário que guarda o valor?
+    string nome;      
     string pos_linha;  // variável temporária para índice linha
     string pos_coluna; // variável temporária para índice coluna
 };
 
 struct matriz {
     string nome;        // nome original da matriz
-    string apelido;     // nome interno (apelido) da matriz, ex: t3
-    string tipo;        // tipo da matriz (int, float...)
+    string apelido;     // nome interno (apelido) da matriz
+    string tipo;        // tipo da matriz
     string tam_linha;   // variável/valor com tamanho da linha
     string tam_coluna;  // variável/valor com tamanho da coluna
 };
@@ -89,7 +107,7 @@ vector<SwitchContext> switch_stack;
 
 vector<simbolo> tabela_global;
 vector<temporario> vetortemporarios;
-int capacidade_temporarios = 100;
+int capacidade_temporarios = 300;
 vector<map<string, simbolo>> pilhaDeTabelas;
 int contadorEscopo = 0;
 stack<int> pilhaEscopos;
@@ -109,13 +127,13 @@ string gentempcodeloop();
 string gentempcodeif();
 string gentempcodeswitch();
 Atributos operacao(Atributos atr1, Atributos atr2, string op);
-void armazenartemporarios(string var, string tipo);
+void armazenartemporarios(string var, string tipo, string escopo);
 string gerarvariavel(string tipo);
 string gerarvariavel_de_usuario(const string& tipo, const string& nomeOriginal);
 void adicionar_simbolo(string nome_original, string nome_interno, string tipo);
 simbolo buscar_simbolo(const string& nome_original);
 simbolo buscar_simbolo_por_interno(const string& nome_interno);
-string imprimir_temporarios();
+string imprimir_temporarios(const string& escopo);
 string imprimir_simbolos_escopo_atual();
 string converter_bool_int(string traducao);
 atributos operacao_relacional(atributos atr1, atributos atr2, string op);
@@ -125,6 +143,7 @@ Atributos operacao_logica(atributos atr1, atributos atr2, string op);
 Atributos operacao_not(atributos atr);
 void verificaOperacao(atributos atr1, atributos atr2, string op);
 Atributos verificaCoercao(Atributos &atr1, Atributos &atr2);
+Atributos verificaCoercaoRetorno(const Atributos &tipoEsperado, const Atributos &expr);
 Atributos converteTipo(Atributos variavel);
 bool tipoInvalidoParaOperacao(string tipo);
 Atributos verificaTiposAtribuicao(string tipoVar, Atributos expr);
@@ -133,6 +152,11 @@ switchcase criar_contexto_switch();string puxa_apelido_matriz(const string& nome
 void verifica_posicao_elemento_matriz(const string& nome_matriz, const string& pos_linha, const string& pos_coluna);
 matriz buscar_matriz(const string& nome);
 void adiciona_matriz(string nome_original, string apelido, string tipo, string tam_linha, string tam_coluna);
+string buscar_nome_interno_funcao(string nome);
+string buscar_tipo_retorno_funcao(string nome);
+void verificar_funcao(string nome, vector<string> args);
+void adicionar_funcao(string nome, string tipo_retorno, vector<string> parametros) ;
+string traduz_tipo(string tipo);
 
 
 
@@ -144,10 +168,10 @@ void adiciona_matriz(string nome_original, string apelido, string tipo, string t
 %token TK_MENOR_IGUAL TK_MAIOR_IGUAL TK_DIFERENTE TK_IGUALDADE TK_OP_UNARIO TK_OP_COMPOSTO
 %token TK_AND TK_OR
 %token TK_IF TK_ELSE
-%token TK_PRINT TK_READ
+%token TK_PRINT TK_PRINTLN TK_READ
 %token TK_BREAK TK_CONTINUE
 %token TK_FOR TK_WHILE TK_DO
-%token TK_SWITCH TK_CASE TK_DEFAULT TK_MATRIX TK_VECTOR 
+%token TK_SWITCH TK_CASE TK_DEFAULT TK_MATRIX TK_VECTOR TK_RETURN TK_VOID
 
 %start S
 
@@ -167,31 +191,75 @@ void adiciona_matriz(string nome_original, string apelido, string tipo, string t
 
 
 %%
-S 		: INICIO	
-		{
-			$$ = $1; 
-		}
-
-INICIO 	: DECLR_TIPO ';' INICIO
-		{
-			
-		}
-		| MAIN 
+		S : INICIO
+		  {
+		    cout << $1.funcoes << "\n";  
+		    
+		  }
 		;
 
 
-MAIN :  TK_TIPO_INT TK_MAIN '(' ')' BLOCO
-		{
+INICIO : DECLR_TIPO ';' INICIO
+        {
+            $$.traducao = $1.traducao + $2.traducao; 
+            $$.funcoes = $2.funcoes;
+        }
+        | MATRIZ ';' INICIO
+        {
+            $$.traducao = $1.traducao + $3.traducao;
+            $$.funcoes = $3.funcoes;
+        }
+        | VETOR ';' INICIO
+        {
+            $$.traducao = $1.traducao + $3.traducao;
+            $$.funcoes = $3.funcoes;
+        }
+        | DECLR_FUNCAO INICIO
+        {
+            
+            $$.traducao = $1.traducao + $2.traducao;  
+            $$.funcoes = $1.traducao + $2.funcoes;
+        }
+        | MAIN
+        {
+            // $1.traducao tem o código da main
+            $$.traducao = $1.traducao;
+            $$.funcoes = "";
+        }
+        ;
+
+
+
+
+MAIN : TK_MAIN '(' ')' 
+{
+		    
+		    expr_funcao_atual.nome = "";
+		    expr_funcao_atual.nome_interno = "";
+		    expr_funcao_atual.parametros.clear();
+		    expr_funcao_atual.tipo_retorno = "";
+}
+BLOCO
+		{	
+		 	
+
 		    string codigo = "/*Compilador FOCA*/\n"
 		                    "#include <iostream>\n"
 		                    "#include<string.h>\n"
 		                    "#include<stdio.h>\n"
 		                    "#include<stdlib.h>\n";
-    
+    		string prototipos = "";
+			for (string f : declaracoes_funcoes) {
+			    prototipos += f + "\n";
+			}
+
+			codigo += prototipos + "\n"; 
 		    codigo += imprime_tabela_global() + "\n";
+		    
 		    codigo += "int main(void) {\n";
+		    codigo += imprimir_temporarios("main") + "\n";
 		    codigo += imprimir_simbolos_escopo_atual() + "\n";
-		    codigo += imprimir_temporarios() + "\n";
+		    
 
 		    codigo += $5.traducao;
 
@@ -234,6 +302,14 @@ COMANDO 	: E ';'
 			{
 				$$.traducao = $1.traducao;
 			}
+			|DECLR_FUNCAO
+			{
+				$$.traducao = $1.traducao;
+			}
+			|CHAMADA_FUNCAO ';'
+			{
+				$$.traducao = $1.traducao;
+			}
 			|CONDICIONAL
 			{
 				$$.traducao = $1.traducao;
@@ -255,7 +331,167 @@ COMANDO 	: E ';'
 		    {
 		    	$$.traducao = $1.traducao;
 		    }
+		    | RETURN
+		    {
+		    	$$.traducao = $1.traducao;
+		    }
 		 	;
+DECLR_FUNCAO: 
+    TIPO TK_ID '(' PARAMS ')' 
+    {
+        adicionar_funcao($2.label, $1.tipo, $4.parametros);
+
+        expr_funcao_atual.nome = $2.label;
+        expr_funcao_atual.nome_interno = "userfunc_" + $2.label + "_" + to_string(contador_func - 1);
+        expr_funcao_atual.tipo_retorno = $1.tipo;
+        expr_funcao_atual.parametros = $4.parametros;
+    }
+    BLOCO
+    {
+        string nome_funcao_interna = expr_funcao_atual.nome_interno;
+
+        string tipo_retorno_c = $1.tipo;
+		if (tipo_retorno_c == "string") {
+		    tipo_retorno_c = "char*";
+		} else if (tipo_retorno_c == "bool") {
+		    tipo_retorno_c = "int";
+		}
+
+
+        string parametros = $4.label;
+        if (!parametros.empty()) {
+            size_t pos = 0;
+            while ((pos = parametros.find("string", pos)) != string::npos) {
+                parametros.replace(pos, 6, "char*");
+                pos += 6;
+            }
+        }
+
+        string cabecalho = tipo_retorno_c + " " + nome_funcao_interna + "(" + parametros + ")";
+        string declaracao_temporarios = imprimir_temporarios(nome_funcao_interna);
+
+        $$.traducao = "/* Declaração de função */\n" + cabecalho + " {\n" + declaracao_temporarios + $7.traducao + "}\n";
+    };
+
+PARAMS:
+      /* vazio */
+      {
+          $$.parametros = {};
+          $$.traducao = "";
+          $$.label = ""; 
+      }
+    | PARAMS_LIST
+      {
+          $$.parametros = $1.parametros;
+          $$.traducao = $1.traducao;
+          $$.label = $1.label; 
+      };
+
+PARAMS_LIST:
+    TIPO TK_ID
+    {
+        string nome = $2.label;
+        string tipo = $1.tipo;
+        string interno = gerarvariavel_de_usuario(tipo, nome);
+        adicionar_simbolo(nome, interno, tipo);
+
+        $$.parametros = { tipo };
+        $$.traducao = "\t" + tipo + " " + interno + ";\n";
+        $$.label = tipo + " " + interno;
+    }
+  | PARAMS_LIST ',' TIPO TK_ID
+    {
+        string nome = $4.label;
+        string tipo = $3.tipo;
+        string interno = gerarvariavel_de_usuario(tipo, nome);
+        adicionar_simbolo(nome, interno, tipo);
+
+        $1.parametros.push_back(tipo);
+        $$.parametros = $1.parametros;
+        $$.traducao = $1.traducao + "\t" + tipo + " " + interno + ";\n";
+        $$.label = $1.label + ", " + tipo + " " + interno;
+    };
+
+
+CHAMADA_FUNCAO:
+    TK_ID '(' ARGS ')' {
+        string tipoFuncao = buscar_tipo_retorno_funcao($1.label);
+        verificar_funcao($1.label, $3.tipos);
+
+        if (tipoFuncao == "void") {
+            $$.traducao = $3.traducao;
+            $$.traducao += "\t" + buscar_nome_interno_funcao($1.label) + "(" + $3.label + ");\n";
+            $$.label = "";
+            $$.tipo = "void";
+        } else {
+            string retorno = gerarvariavel(tipoFuncao);
+            $$.traducao = $3.traducao;
+            $$.traducao += "\t" + retorno + " = " + buscar_nome_interno_funcao($1.label) + "(" + $3.label + ");\n";
+            $$.label = retorno;
+            $$.tipo = tipoFuncao;
+        }
+    }
+;
+
+
+ARGS:
+      /* vazio */
+      {
+          $$.tipos = {};
+          $$.label = "";
+          $$.traducao = "";
+      }
+    | LISTA_ARGS
+      {
+          $$.tipos = $1.tipos;
+          $$.label = $1.label;
+          $$.traducao = $1.traducao;
+      };
+
+LISTA_ARGS:E
+	{
+          $$.tipos = { $1.tipo };
+          $$.label = $1.label;
+          $$.traducao = $1.traducao;
+      }
+    | LISTA_ARGS ',' E
+      {
+          $1.tipos.push_back($3.tipo);
+          $$.tipos = $1.tipos;
+          $$.label = $1.label + ", " + $3.label;
+          $$.traducao = $1.traducao + $3.traducao;
+      };
+
+RETURN:
+    TK_RETURN E ';'
+    {
+        Atributos tipoEsperado;
+        tipoEsperado.tipo = expr_funcao_atual.tipo_retorno;
+
+        if (tipoEsperado.tipo == "void") {
+            yyerror("Função void não pode retornar um valor.");
+        }
+
+        Atributos exprCorrigido = verificaCoercaoRetorno(tipoEsperado, $2);
+
+        if (tipoEsperado.tipo == "string") {
+            string tempVar = gerarvariavel("string");
+            string copia = "\tstrcpy(" + tempVar + ", " + exprCorrigido.label + ");\n";
+            $$.traducao = exprCorrigido.traducao + copia + "\treturn " + tempVar + ";\n";
+        } else {
+            $$.traducao = exprCorrigido.traducao + "\treturn " + exprCorrigido.label + ";\n";
+        }
+    }
+  | TK_RETURN ';'
+    {
+        if (expr_funcao_atual.tipo_retorno != "void") {
+            yyerror("Função não-void deve retornar um valor.");
+        }
+        $$.traducao = "\treturn;\n";
+    }
+;
+
+
 
 MATRIZ : TK_MATRIX TIPO TK_ID '[' TK_NUM ']' '[' TK_NUM ']'
 			{
@@ -335,31 +571,53 @@ CONDICIONAL :TK_IF '(' E ')' BLOCO
 			    $$.traducao += lbl_end + ":\n";
 			};
 
-IN_OUT       
-		    : TK_PRINT '(' E ')' ';'
-		    {
-		        $$.traducao = $3.traducao;
-
-		        if ($3.tipo == "string") {
-		            $$.traducao += "\tprintf(\"%s\\n\", " + $3.label + ");\n";
-		        }
-		        else if ($3.tipo == "int" || $3.tipo == "bool") {
-		            if ($3.tipo == "bool") {
-		                $$.traducao += "\tprintf(\"%s\\n\", " + $3.label + " ? \"true\" : \"false\");\n";
-		            } else {
-		                $$.traducao += "\tprintf(\"%d\\n\", " + $3.label + ");\n";
-		            }
-		        }
-		        else if ($3.tipo == "float") {
-		            $$.traducao += "\tprintf(\"%f\\n\", " + $3.label + ");\n";
-		        }
-		        else if ($3.tipo == "char") {
-		            $$.traducao += "\tprintf(\"%c\\n\", " + $3.label + ");\n";
-		        }
-		        else {
-		            yyerror(("Não é possível imprimir o tipo " + $3.tipo).c_str());
-		        }
-		    }
+IN_OUT
+	    : TK_PRINT '(' E ')' ';'
+	    {
+	        $$.traducao = $3.traducao;
+	        if ($3.tipo == "string") {
+	            $$.traducao += "\tprintf(\"%s\", " + $3.label + ");\n";
+	        }
+	        else if ($3.tipo == "int" || $3.tipo == "bool") {
+	            if ($3.tipo == "bool") {
+	                $$.traducao += "\tprintf(\"%s\", " + $3.label + " ? \"true\" : \"false\");\n";
+	            } else {
+	                $$.traducao += "\tprintf(\"%d\", " + $3.label + ");\n";
+	            }
+	        }
+	        else if ($3.tipo == "float") {
+	            $$.traducao += "\tprintf(\"%f\", " + $3.label + ");\n";
+	        }
+	        else if ($3.tipo == "char") {
+	            $$.traducao += "\tprintf(\"%c\", " + $3.label + ");\n";
+	        }
+	        else {
+	            yyerror(("Não é possível imprimir o tipo " + $3.tipo).c_str());
+	        }
+	    }
+	  | TK_PRINTLN '(' E ')' ';'
+	    {
+	        $$.traducao = $3.traducao;
+	        if ($3.tipo == "string") {
+	            $$.traducao += "\tprintf(\"%s\\n\", " + $3.label + ");\n";
+	        }
+	        else if ($3.tipo == "int" || $3.tipo == "bool") {
+	            if ($3.tipo == "bool") {
+	                $$.traducao += "\tprintf(\"%s\\n\", " + $3.label + " ? \"true\" : \"false\");\n";
+	            } else {
+	                $$.traducao += "\tprintf(\"%d\\n\", " + $3.label + ");\n";
+	            }
+	        }
+	        else if ($3.tipo == "float") {
+	            $$.traducao += "\tprintf(\"%f\\n\", " + $3.label + ");\n";
+	        }
+	        else if ($3.tipo == "char") {
+	            $$.traducao += "\tprintf(\"%c\\n\", " + $3.label + ");\n";
+	        }
+	        else {
+	            yyerror(("Não é possível imprimir o tipo " + $3.tipo).c_str());
+	        }
+	    }
 
 		    | TK_READ '(' TK_ID ')' ';'
 		    {
@@ -564,7 +822,7 @@ CASES DEFAULT_CASE
 			    fechar_escopo();
 			    string traducao_ifs = $3.ifs;
 
-			    // Se tiver um default definido, forçamos um ELSE GOTO DEFAULT
+			    
 			    if ($4.default_block != "") {
 			        traducao_ifs += "\telse goto DEFAULT;\n";
 			    }
@@ -614,7 +872,7 @@ JUMP	 : TK_BREAK ';'
 			        }
 			        $$.traducao = "\tgoto " + destino_continue + ";\n";
 			    } else {
-			        yyerror("DEBUG: continue fora de loop detectado\n");
+			        yyerror("continue fora de loop detectado\n");
 			        $$.traducao = "/* ERRO: continue fora de loop */\n";
 			    }
 			} else {
@@ -639,6 +897,12 @@ E 		: ARITMETICO
 		| LOGICO
 		{
 		    $$.tipo = $1.tipo;
+		    $$.label = $1.label;
+		    $$.traducao = $1.traducao;
+		}
+		|CHAMADA_FUNCAO
+		{
+			$$.tipo = $1.tipo;
 		    $$.label = $1.label;
 		    $$.traducao = $1.traducao;
 		}
@@ -727,7 +991,7 @@ E 		: ARITMETICO
 		    verifica_posicao_elemento_matriz($1.label, "1", indice);
 
 		    if (v.tipo == "string") {
-		        // Aloca espaço e copia a string do vetor
+		        
 		        $$.traducao += "\t" + temp + " = (char*) malloc(256);\n";
 		        $$.traducao += "\tstrcpy(" + temp + ", " + apelido + "[" + indice + "]);\n";
 		    } else {
@@ -802,8 +1066,6 @@ ATRIBUICAO  : TK_ID '=' E
 			        if(sim.tipo == "") {
 			            yyerror("Variável não declarada");
 			        }
-
-			        // Exemplo de mapeamento do operador composto para a operação
 			        string op;
 
 			        if ($2.label == "+=") op = "+";
@@ -813,8 +1075,7 @@ ATRIBUICAO  : TK_ID '=' E
 					else if ($2.label == "%=") op = "%";
 					else yyerror("Operador composto desconhecido");
 
-			        // gera tradução
-			        $$.traducao = $3.traducao;  // traduz expressão da direita
+			        $$.traducao = $3.traducao; 
 			        $$.traducao += "\t" + sim.nome_interno + " = " + sim.nome_interno + " " + op + " " + $3.label + ";\n";
 			        $$.tipo = sim.tipo;
 			        $$.label = sim.nome_interno;
@@ -835,7 +1096,7 @@ ATRIBUICAO  : TK_ID '=' E
 			    $$.traducao += "\t" + valor + " = " + $6.label + ";\n";
 
 			    if ($6.tipo != m.tipo) {
-			        cerr << "Debug: valor tipo = " << $6.tipo << ", vetor tipo = " << m.tipo << endl;
+			        
 			        yyerror(("tipo incompatível na atribuição ao vetor " + string($1.label)).c_str());
 			    }
 
@@ -863,7 +1124,6 @@ ATRIBUICAO  : TK_ID '=' E
 
 			    $$.traducao = "";
 
-			    // Correção importante — adicionando as traduções dos índices!
 			    $$.traducao += $3.traducao;
 			    $$.traducao += $6.traducao;
 			    $$.traducao += $9.traducao;
@@ -873,11 +1133,11 @@ ATRIBUICAO  : TK_ID '=' E
 			    $$.traducao += "\t" + valor + " = " + $9.label + ";\n";
 
 			    if ($9.tipo != m.tipo) {
-			        cerr << "Debug: valor tipo = " << $9.tipo << ", matriz tipo = " << m.tipo << endl;
+			        
 			        yyerror(("tipo incompatível na atribuição à matriz " + string($1.label)).c_str());
 			    }
 
-			    verifica_posicao_elemento_matriz($1.label, linha, coluna);
+			    verifica_posicao_elemento_matriz($1.label, $3.label, $6.label);
 
 			    if (m.tipo == "string") {
 			        $$.traducao += "\tstrcpy(" + apelido + "[" + linha + "][" + coluna + "], " + valor + ");\n";
@@ -995,7 +1255,7 @@ TIPOS 		: TK_LOGICO
 			| TK_STRING
 			{
 			    $$.tipo = "string";
-			    $$.label = gerarvariavel("string"); // ex: t1
+			    $$.label = gerarvariavel("string"); 
 			    $$.traducao += "\tstrcpy(" + $$.label + ", " + $1.label + ");\n";
 			}
 			;
@@ -1048,6 +1308,7 @@ DECLR_TIPO : TIPO TK_ID
 			     | TK_TIPO_BOOLEAN   { $$.tipo = "bool"; }
 			     | TK_TIPO_CHAR   { $$.tipo = "char"; }
 			     | TK_TIPO_STRING { $$.tipo = "string"; }
+			     | TK_VOID  { $$.tipo = "void"; }
 			     ;
 
 
@@ -1106,12 +1367,13 @@ string gentempcode()
 	return var;
 }
 
-string gerarvariavel(string tipo)
-{	
-	string var = gentempcode();
-	armazenartemporarios(var,tipo);
-	return var;
+string gerarvariavel(string tipo) {
+    string var = gentempcode();
+    string escopo = expr_funcao_atual.nome_interno.empty() ? "main" : expr_funcao_atual.nome_interno;
+    armazenartemporarios(var, tipo, escopo);
+    return var;
 }
+
 
 bool existe_variavel_no_escopo_atual(const string& nome) {
     return !pilhaDeTabelas.empty() && pilhaDeTabelas.back().count(nome) > 0;
@@ -1195,28 +1457,30 @@ string converter_bool_int(string traducao){
 }
 
 
-void armazenartemporarios(string var, string tipo) {
-	vetortemporarios.push_back({var,tipo});
-	
+void armazenartemporarios(string var, string tipo, string escopo) {
+    vetortemporarios.push_back({var, tipo, escopo});
+    
+
 }
 
-string imprimir_temporarios() {
-    string strtemp;
 
-    for (int i = 0; i < vetortemporarios.size(); i++) {
-        if (vetortemporarios[i].tipo == "bool") {
-            strtemp += "\tint " + vetortemporarios[i].var + ";\n";
-        }
-        else if (vetortemporarios[i].tipo == "string") {
-            strtemp += "\tchar* " + vetortemporarios[i].var + " = (char*) malloc(256 * sizeof(char));\n";
-        }
-        else {
-            strtemp += "\t" + vetortemporarios[i].tipo + " " + vetortemporarios[i].var + ";\n";
+
+string imprimir_temporarios(const string& escopo) {
+    string strtemp;
+    for (const auto& temp : vetortemporarios) {
+        if (temp.escopo != escopo) continue;
+
+        if (temp.tipo == "bool") {
+            strtemp += "\tint " + temp.var + ";\n";
+        } else if (temp.tipo == "string") {
+            strtemp += "\tchar* " + temp.var + " = (char*) malloc(256 * sizeof(char));\n";
+        } else {
+            strtemp += "\t" + temp.tipo + " " + temp.var + ";\n";
         }
     }
-
     return strtemp;
 }
+
 
 
 string imprime_tabela_global() {
@@ -1226,7 +1490,7 @@ string imprime_tabela_global() {
         auto& escopo_global = pilhaDeTabelas.front();
         for (auto& par : escopo_global) {
             if (par.second.tipo == "string") {
-                ss << "char " << par.second.nome_interno << "[256];\n";
+               ss << "char* " << par.second.nome_interno << ";\n";
             } else if (par.second.tipo == "bool") {
                 ss << "int " << par.second.nome_interno << ";\n";
             } else {
@@ -1343,10 +1607,36 @@ Atributos verificaCoercao(Atributos &atr1, Atributos &atr2) {
 
     var.tipo = atr1.tipo;
     var.traducao = atr1.traducao + atr2.traducao;
-    var.label = "";
-
+    var.label = atr2.label;
     return var;
 }
+
+Atributos verificaCoercaoRetorno(const Atributos &tipoEsperado, const Atributos &expr) {
+    Atributos var = expr;
+
+    if (tipoEsperado.tipo == "char") {
+        yyerror(("Tipo inválido para retorno: " + tipoEsperado.tipo).c_str());
+    }
+
+    if (tipoEsperado.tipo != expr.tipo) {
+        
+        if (tipoEsperado.tipo == "float" && expr.tipo == "int") {
+            var = converteTipo(expr); 
+            var.tipo = "float";
+        }
+        else if (tipoEsperado.tipo == "int" && expr.tipo == "float") {
+            yyerror("Não é possível converter float para int no retorno");
+        }
+        else if (tipoEsperado.tipo == "string" && expr.tipo == "string") {
+            
+        }
+        else {
+            yyerror(("Tipos incompatíveis no retorno: esperado " + tipoEsperado.tipo + ", got " + expr.tipo).c_str());
+        }
+    }
+    return var;
+}
+
 
 
 void verificatipo(string atr1nome, string atr2nome) {
@@ -1430,8 +1720,6 @@ Atributos verificaTiposAtribuicao(string tipoVar, Atributos expr) {
         resultado = converteTipo(expr);
         return resultado;
     }
-
-    // conversão float -> int (permitida, mas gera cast explícito)
     if (tipoVar == "int" && expr.tipo == "float") {
         resultado.label = gerarvariavel("int");
         resultado.tipo = "int";
@@ -1475,7 +1763,7 @@ loop criar_contexto_loop(bool tem_incremento) {
     ctrl_ctx.tipo = CONTEXTO_LOOP;
     ctrl_ctx.lbl_fim = ctx.fim_loop;
     ctrl_ctx.lbl_incremento = ctx.incremento_loop;
-    ctrl_ctx.lbl_inicio = ctx.inicio_loop;  // útil em while/do-while
+    ctrl_ctx.lbl_inicio = ctx.inicio_loop;  
     controle_stack.push_back(ctrl_ctx);
 
     loops.push_back(ctx);
@@ -1533,21 +1821,101 @@ matriz buscar_matriz(const string& nome) {
 void verifica_posicao_elemento_matriz(const string& nome_matriz, const string& pos_linha, const string& pos_coluna) {
     matriz m = buscar_matriz(nome_matriz);
 
-    // Aqui você pode gerar código intermediário para checar limites, por exemplo:
-    // if (pos_linha >= m.tam_linha) error
-    // if (pos_coluna >= m.tam_coluna) error
-    // Mas para simplicidade, apenas imprima ou armazene essa lógica para análise futura
+    try {
+        int linha = stoi(pos_linha);
+        int coluna = stoi(pos_coluna);
+        int tam_linha = stoi(m.tam_linha);
+        int tam_coluna = stoi(m.tam_coluna);
 
-    // Exemplo (pseudo código para gerar código intermediário):
-    cout << "/* verificar se " << pos_linha << " < " << m.tam_linha << " */\n";
-    cout << "/* verificar se " << pos_coluna << " < " << m.tam_coluna << " */\n";
+        if (linha < 0 || linha >= tam_linha) {
+            yyerror(("Linha fora dos limites da matriz '" + nome_matriz + "'. Valor: " + to_string(linha)).c_str());
+        }
+
+        if (coluna < 0 || coluna >= tam_coluna) {
+            yyerror(("Coluna fora dos limites da matriz '" + nome_matriz + "'. Valor: " + to_string(coluna)).c_str());
+        }
+
+    } catch (...) {
+        
+    }
 }
+
+
 
 string puxa_apelido_matriz(const string& nome_original) {
     matriz m = buscar_matriz(nome_original);
     return m.apelido;
 }
 
+void adicionar_funcao(string nome, string tipo_retorno, vector<string> parametros) {
+    for (Funcao f : tabelaFuncoes) {
+        if (f.nome == nome && f.parametros.size() == parametros.size()) {
+            yyerror(("Função já declarada: " + nome).c_str());
+        }
+    }
+
+    Funcao nova;
+    nova.nome = nome;
+    nova.nome_interno = "userfunc_" + nome + "_" + to_string(contador_func++);
+    nova.tipo_retorno = tipo_retorno;
+    nova.parametros = parametros;
+
+    tabelaFuncoes.push_back(nova);
+
+    // Gera assinatura das funções com tradução de tipos
+    string prototipo = traduz_tipo(tipo_retorno) + " " + nova.nome_interno + "(";
+    for (size_t i = 0; i < parametros.size(); ++i) {
+        if (i > 0) prototipo += ", ";
+        prototipo += traduz_tipo(parametros[i]) + " arg" + to_string(i + 1);
+    }
+
+    prototipo += ");";
+
+    declaracoes_funcoes.push_back(prototipo);
+}
+
+string traduz_tipo(string tipo) {
+    if (tipo == "string") return "char*";
+    if (tipo == "bool") return "int";
+    return tipo; 
+
+}
+
+void verificar_funcao(string nome, vector<string> args) {
+    for (Funcao f : tabelaFuncoes) {
+        if (f.nome == nome && f.parametros.size() == args.size()) {
+            for (size_t i = 0; i < args.size(); i++) {
+                if (f.parametros[i] != args[i]) {
+    				if (!(f.parametros[i] == "float" && args[i] == "int")) {
+			        yyerror(("Tipo do parâmetro " + to_string(i+1) + " inválido na função " + nome).c_str());
+			    	}
+				}
+            }
+            return; // função válida
+        }
+    }
+    yyerror(("Função não declarada ou chamada incorreta: " + nome).c_str());
+}
+
+string buscar_tipo_retorno_funcao(string nome) {
+    for (Funcao f : tabelaFuncoes) {
+        if (f.nome == nome) {
+            return f.tipo_retorno;
+        }
+    }
+    yyerror(("Função não declarada: " + nome).c_str());
+    return "";
+}
+
+string buscar_nome_interno_funcao(string nome) {
+    for (Funcao f : tabelaFuncoes) {
+        if (f.nome == nome) {
+            return f.nome_interno;
+        }
+    }
+    yyerror(("Função não declarada: " + nome).c_str());
+    return "";
+}
 
 
 int main(int argc, char* argv[]) {
