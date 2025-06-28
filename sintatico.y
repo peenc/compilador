@@ -7,7 +7,6 @@
 #include <stack>
 
 #define YYSTYPE atributos
-
 using namespace std;
 
 int var_temp_qnt = 0;
@@ -142,7 +141,7 @@ void adiciona_matriz(string nome_original, string apelido, string tipo, string t
 %token TK_NUM TK_REAL TK_CHAR TK_LOGICO TK_STRING 
 %token TK_MAIN TK_ID TK_TIPO_INT TK_TIPO_FLOAT TK_TIPO_BOOLEAN TK_TIPO_CHAR TK_TIPO_STRING
 %token TK_FIM TK_ERROR
-%token TK_MENOR_IGUAL TK_MAIOR_IGUAL TK_DIFERENTE TK_IGUALDADE
+%token TK_MENOR_IGUAL TK_MAIOR_IGUAL TK_DIFERENTE TK_IGUALDADE TK_OP_UNARIO TK_OP_COMPOSTO
 %token TK_AND TK_OR
 %token TK_IF TK_ELSE
 %token TK_PRINT TK_READ
@@ -160,6 +159,7 @@ void adiciona_matriz(string nome_original, string apelido, string tipo, string t
 %left '*' '/'
 %right '!'
 %left ':'
+
 
 
 
@@ -230,9 +230,9 @@ COMANDO 	: E ';'
 				$$ = $1;
 			}
 			
-			| DECLR_TIPO
+			| DECLR_TIPO ';'
 			{
-				$$.traducao = "";
+				$$.traducao = $1.traducao;
 			}
 			|CONDICIONAL
 			{
@@ -660,6 +660,18 @@ E 		: ARITMETICO
 		    $$.label = $1.label;
 		    $$.traducao = $1.traducao;
 		}
+		|UNARIO_PREFIXO
+		{
+			$$.tipo = $1.tipo;
+		    $$.label = $1.label;
+		    $$.traducao = $1.traducao;
+		}
+		|UNARIO_POSFIXO
+		{
+			$$.tipo = $1.tipo;
+		    $$.label = $1.label;
+		    $$.traducao = $1.traducao;
+		}
 		| TIPOS
 		{
 		    $$.tipo = $1.tipo;
@@ -673,35 +685,100 @@ E 		: ARITMETICO
 		    $$.label = sim.nome_interno;
 		    $$.traducao = "";
 		}
-		| '(' CAST ')' E
-		{
-		    $$.tipo = $2.tipo;
-		    $$.label = gerarvariavel($$.tipo);
-		    $$.traducao = $4.traducao + "\t" + $$.label + " = (" + $2.tipo + ") " + $4.label + ";\n";
+		| CASTING{
+ 			$$.tipo = $1.tipo;
+		    $$.label = $1.label;
+		    $$.traducao = $1.traducao;
+
 		}
 		| TK_ID '[' E ']' '[' E ']'
 		{
 		    matriz m = buscar_matriz($1.label);
 		    string apelido = m.apelido;
 		    
-		    string linha = gerarvariavel("int");    // correto!
-		    string coluna = gerarvariavel("int");   // correto!
-		    string temp = gerarvariavel(m.tipo);    // correto!
+		    string linha = gerarvariavel("int");    
+		    string coluna = gerarvariavel("int");  
+		    string temp = gerarvariavel(m.tipo);   
 
 		    $$.tipo = m.tipo;
 		    $$.label = temp;
 
-		    $$.traducao = $3.traducao + $5.traducao;
+		    $$.traducao = $3.traducao + $6.traducao;
 		    $$.traducao += "\t" + linha + " = " + $3.label + ";\n";
 		    $$.traducao += "\t" + coluna + " = " + $6.label + ";\n";
 
 		    verifica_posicao_elemento_matriz($1.label, linha, coluna);
 		    $$.traducao += "\t" + temp + " = " + apelido + "[" + linha + "][" + coluna + "];\n";
 		}
-		;
+		| TK_ID '[' E ']'
+		{
+		    matriz v = buscar_matriz($1.label);  
+		    string apelido = v.apelido;
 
-ATRIBUICAO
-		    : TK_ID '=' E
+		    string indice = gerarvariavel("int");
+		    string temp = gerarvariavel(v.tipo);
+
+		    $$.tipo = v.tipo;
+		    $$.label = temp;
+
+		    $$.traducao = $3.traducao;
+		    $$.traducao += "\t" + indice + " = " + $3.label + ";\n";
+
+		    verifica_posicao_elemento_matriz($1.label, "1", indice);
+
+		    if (v.tipo == "string") {
+		        // Aloca espaço e copia a string do vetor
+		        $$.traducao += "\t" + temp + " = (char*) malloc(256);\n";
+		        $$.traducao += "\tstrcpy(" + temp + ", " + apelido + "[" + indice + "]);\n";
+		    } else {
+		        $$.traducao += "\t" + temp + " = " + apelido + "[" + indice + "];\n";
+		    }
+		}
+		;
+CASTING : '(' CAST ')' E{
+		$$.tipo = $2.tipo;
+		    $$.label = gerarvariavel($$.tipo);
+		    $$.traducao = $4.traducao + "\t" + $$.label + " = (" + $2.tipo + ") " + $4.label + ";\n";
+};
+UNARIO_PREFIXO:
+      TK_OP_UNARIO E
+      {
+        simbolo sim = buscar_simbolo_por_interno($2.label);
+        string temp = gerarvariavel(sim.tipo);
+        if ($1.label == "++") {
+            // incrementa a variável
+            $$.traducao = $2.traducao;
+            $$.traducao += "\t" + sim.nome_interno + " = " + sim.nome_interno + " + 1;\n";
+            // o resultado é a variável já incrementada
+            $$.traducao += "\t" + temp + " = " + sim.nome_interno + ";\n";
+        } else if ($1.label == "--") {
+            $$.traducao = $2.traducao;
+            $$.traducao += "\t" + sim.nome_interno + " = " + sim.nome_interno + " - 1;\n";
+            $$.traducao += "\t" + temp + " = " + sim.nome_interno + ";\n";
+        }
+        $$.label = temp;
+        $$.tipo = sim.tipo;
+      }
+
+UNARIO_POSFIXO:
+      E TK_OP_UNARIO
+      {
+        simbolo sim = buscar_simbolo_por_interno($1.label);
+        string temp = gerarvariavel(sim.tipo);
+        if ($2.label == "++") {
+            // guarda o valor antes do incremento
+            $$.traducao = $1.traducao;
+            $$.traducao += "\t" + temp + " = " + sim.nome_interno + ";\n";
+            $$.traducao += "\t" + sim.nome_interno + " = " + sim.nome_interno + " + 1;\n";
+        } else if ($2.label == "--") {
+            $$.traducao = $1.traducao;
+            $$.traducao += "\t" + temp + " = " + sim.nome_interno + ";\n";
+            $$.traducao += "\t" + sim.nome_interno + " = " + sim.nome_interno + " - 1;\n";
+        }
+        $$.label = temp;
+        $$.tipo = sim.tipo;
+      }
+ATRIBUICAO  : TK_ID '=' E
 		    {
 		        struct simbolo sim = buscar_simbolo($1.label);
 		        if (sim.tipo == "") {
@@ -719,7 +796,30 @@ ATRIBUICAO
 		        $$.label = sim.nome_interno;
 		        $$.tipo = sim.tipo;
 		    }
-		    | TK_ID '[' TK_NUM ']' '=' E
+		    |TK_ID TK_OP_COMPOSTO E
+			    {
+			        simbolo sim = buscar_simbolo($1.label);
+			        if(sim.tipo == "") {
+			            yyerror("Variável não declarada");
+			        }
+
+			        // Exemplo de mapeamento do operador composto para a operação
+			        string op;
+
+			        if ($2.label == "+=") op = "+";
+					else if ($2.label == "-=") op = "-";
+					else if ($2.label == "*=") op = "*";
+					else if ($2.label == "/=") op = "/";
+					else if ($2.label == "%=") op = "%";
+					else yyerror("Operador composto desconhecido");
+
+			        // gera tradução
+			        $$.traducao = $3.traducao;  // traduz expressão da direita
+			        $$.traducao += "\t" + sim.nome_interno + " = " + sim.nome_interno + " " + op + " " + $3.label + ";\n";
+			        $$.tipo = sim.tipo;
+			        $$.label = sim.nome_interno;
+			    }
+		    | TK_ID '[' E ']' '=' E
 			{
 			    matriz m = buscar_matriz($1.label);
 			    string apelido = m.apelido;
@@ -728,7 +828,9 @@ ATRIBUICAO
 			    string valor = gerarvariavel(m.tipo);
 
 			    $$.traducao = "";
+			    $$.traducao += $3.traducao; 
 			    $$.traducao += "\t" + indice + " = " + $3.label + ";\n";
+
 			    $$.traducao += $6.traducao;
 			    $$.traducao += "\t" + valor + " = " + $6.label + ";\n";
 
@@ -749,7 +851,8 @@ ATRIBUICAO
 			    $$.tipo = m.tipo;
 			}
 
-    		| TK_ID '[' E ']' '[' E ']' '=' E
+
+    		| TK_ID '[' E']' '[' E ']' '=' E
 			{
 			    matriz m = buscar_matriz($1.label);
 			    string apelido = m.apelido;
@@ -759,9 +862,14 @@ ATRIBUICAO
 			    string valor = gerarvariavel(m.tipo);
 
 			    $$.traducao = "";
+
+			    // Correção importante — adicionando as traduções dos índices!
+			    $$.traducao += $3.traducao;
+			    $$.traducao += $6.traducao;
+			    $$.traducao += $9.traducao;
+
 			    $$.traducao += "\t" + linha + " = " + $3.label + ";\n";
 			    $$.traducao += "\t" + coluna + " = " + $6.label + ";\n";
-			    $$.traducao += $9.traducao;
 			    $$.traducao += "\t" + valor + " = " + $9.label + ";\n";
 
 			    if ($9.tipo != m.tipo) {
@@ -772,17 +880,15 @@ ATRIBUICAO
 			    verifica_posicao_elemento_matriz($1.label, linha, coluna);
 
 			    if (m.tipo == "string") {
-			        // Para string, usa strcpy
 			        $$.traducao += "\tstrcpy(" + apelido + "[" + linha + "][" + coluna + "], " + valor + ");\n";
 			    } else {
-			        // Para tipos primitivos, atribuição direta
 			        $$.traducao += "\t" + apelido + "[" + linha + "][" + coluna + "] = " + valor + ";\n";
 			    }
 
 			    $$.label = apelido;
 			    $$.tipo = m.tipo;
 			}
-			;
+				;
 
 CAST 		: TK_TIPO_INT
 			{
@@ -892,66 +998,58 @@ TIPOS 		: TK_LOGICO
 			    $$.label = gerarvariavel("string"); // ex: t1
 			    $$.traducao += "\tstrcpy(" + $$.label + ", " + $1.label + ");\n";
 			}
-
-			| DECLR_TIPO
-			{
-				$$.traducao = $1.traducao;
-			}
 			;
-DECLR_TIPO : TK_TIPO_INT TK_ID
-			{
-			    string nome_original = $2.label;  // ou $2.valor, depende do seu token
-			    string nome_interno = gerarvariavel_de_usuario("int", nome_original);
-			    adicionar_simbolo(nome_original, nome_interno, "int");
-			    $$.label = nome_interno;
-			    $$.traducao = "\tint " + nome_interno + ";\n";
-			 
-			}
 
-          	| TK_TIPO_FLOAT TK_ID
-            {
-                string nome_original = $2.label;
-                string nome_interno = gerarvariavel_de_usuario("float", nome_original);
-                adicionar_simbolo(nome_original, nome_interno, "float");
-                $$.label = nome_interno;
-                 $$.traducao = "\tfloat " + nome_interno + ";\n";
-            }
-          	| TK_TIPO_CHAR TK_ID
-            {
-                string nome_original = $2.label;
-                string nome_interno = gerarvariavel_de_usuario("char", nome_original);
-                adicionar_simbolo(nome_original, nome_interno, "char");
-                $$.label = nome_interno;
-                 $$.traducao = "\tchar " + nome_interno + ";\n";
-                
-            }
-          	| TK_TIPO_BOOLEAN TK_ID
-            {
-                string nome_original = $2.label;
-                string nome_interno = gerarvariavel_de_usuario("bool", nome_original);
-                adicionar_simbolo(nome_original, nome_interno, "bool");
-                $$.label = nome_interno;
-                $$.traducao = "\tint " + nome_interno + ";\n";
-                
-            }
-          DECLR_TIPO : TK_TIPO_STRING TK_ID
-			{
-			    string nome_original = $2.label;
-			    string nome_interno = gerarvariavel_de_usuario("string", nome_original);
-			    adicionar_simbolo(nome_original, nome_interno, "string");
-			    $$.label = nome_interno;
+DECLR_TIPO : TIPO TK_ID
+		    {
+		        string nome = $2.label;
+		        string tipo = $1.tipo;
+		        string interno = gerarvariavel_de_usuario(tipo, nome);
+		        adicionar_simbolo(nome, interno, tipo);
 
-			    $$.traducao = "\tchar* " + nome_interno + " = (char*) malloc(256 * sizeof(char));\n";
-			}
+		        if (tipo == "string") {
+		            $$.label = interno;
+		            $$.traducao = "\tchar* " + interno + " = (char*) malloc(256 * sizeof(char));\n";
+		        } else if (tipo == "bool") {
+		            $$.label = interno;
+		            $$.traducao = "\tint " + interno + ";\n";
+		        } else {
+		            $$.label = interno;
+		            $$.traducao = "\t" + tipo + " " + interno + ";\n";
+		        }
+		    }
+		    | TIPO TK_ID '=' E
+		    {
+		        // declaração com inicialização
+		        string nome = $2.label;
+		        string tipo = $1.tipo;
+		        string interno = gerarvariavel_de_usuario(tipo, nome);
+		        adicionar_simbolo(nome, interno, tipo);
 
+		        Atributos expr = verificaTiposAtribuicao(tipo, $4);
 
-;	
-TIPO : TK_TIPO_INT    { $$.tipo = "int"; }
-     | TK_TIPO_FLOAT  { $$.tipo = "float"; }
-     | TK_TIPO_BOOLEAN   { $$.tipo = "bool"; }
-     | TK_TIPO_CHAR   { $$.tipo = "char"; }
-     | TK_TIPO_STRING { $$.tipo = "string"; }
-     ;
+		        $$.label = interno;
+
+		        if (tipo == "string") {
+		            $$.traducao = expr.traducao +
+		                          "\tchar* " + interno + " = (char*) malloc(256 * sizeof(char));\n" +
+		                          "\tstrcpy(" + interno + ", " + expr.label + ");\n";
+		        } else if (tipo == "bool") {
+		            $$.traducao = expr.traducao + "\tint " + interno + " = " + expr.label + ";\n";
+		        } else {
+		            $$.traducao = expr.traducao + "\t" + tipo + " " + interno + " = " + expr.label + ";\n";
+		        }
+		    }
+		    ;
+
+	
+			TIPO : TK_TIPO_INT    { $$.tipo = "int"; }
+			     | TK_TIPO_FLOAT  { $$.tipo = "float"; }
+			     | TK_TIPO_BOOLEAN   { $$.tipo = "bool"; }
+			     | TK_TIPO_CHAR   { $$.tipo = "char"; }
+			     | TK_TIPO_STRING { $$.tipo = "string"; }
+			     ;
+
 
 
 %%
@@ -1462,8 +1560,10 @@ int main(int argc, char* argv[]) {
     return 0;
 }
 
-void yyerror(string MSG)
+
+
+void yyerror(std::string MSG)
 {
-	cout << MSG << endl;
-	exit (0);
-}	
+    std::cerr << MSG << std::endl;
+    exit(1);
+}
