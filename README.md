@@ -1,5 +1,5 @@
-# Compilador Foca
-O Foca é o inicio do desenvolvimento de um compilador que é demonstrado na disciplina Compiladores.
+# Compilador Vasco
+O Vasco é o um compilador desenvolvido na disciplina Compiladores da Universidade Federal Rural do Rio de Janeiro.
 
 ## Instalação
 
