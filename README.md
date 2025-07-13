@@ -1,21 +1,58 @@
-# Compilador Vasco
-O Vasco é o um compilador desenvolvido na disciplina Compiladores da Universidade Federal Rural do Rio de Janeiro.
+# ⚙️ Compilador Vasco
 
-## Instalação
+> Um compilador desenvolvido como parte da disciplina de Compiladores na **Universidade Federal Rural do Rio de Janeiro (UFRRJ)**.
 
-É necessário as ferramentas ``flex``, ``bison`` e ``gpp``.
+O **Vasco** é um compilador educacional criado com foco no aprendizado de técnicas de análise léxica, sintática e geração de código intermediário utilizando **Flex** e **Bison**. Ele interpreta arquivos com a extensão `.foca`, validando e processando a linguagem definida no projeto.
 
-### Ubuntu 
-```console
+---
+
+## 🚀 Funcionalidades
+
+- ✅ Análise léxica com Flex (`lexico.l`)
+- ✅ Análise sintática com Bison (`sintatico.y`)
+- ✅ Execução automatizada com Makefile
+- ✅ Suporte à definição e uso de funções
+- ✅ Reconhecimento de estruturas condicionais como `if`
+- ✅ Saída e compilação final automatizada
+
+---
+
+## 🔧 Instalação
+
+Você precisará das ferramentas:
+
+- `flex`
+- `bison`
+- `g++`
+
+### Ubuntu
+
+bash
 sudo apt install build-essential flex bison
-```
 
-## Execução
+▶️ Execução
+Foi criado um Makefile com os comandos necessários para compilar o projeto.
 
-Foi criado um ``Makefile`` com os comandos para a execução e o arquivo exemplo.foca será direcionado para a entrar do compilador gerado ao final do script.
+Passos:
+Compile o projeto:
 
-```console
+bash
+Copiar
+Editar
 make
-```
+O script executará a análise do arquivo exemplo.foca automaticamente.
 
+▶️ Execução
+Foi criado um Makefile com os comandos necessários para compilar o projeto.
 
+Passos:
+Compile o projeto:
+
+make
+
+O script executará a análise do arquivo exemplo.foca automaticamente.
+
+👨‍💻 Autor
+Pedro Nunes
+Desenvolvido como parte da disciplina de Compiladores - UFRRJ
+Contribuições e sugestões são sempre bem-vindas!
