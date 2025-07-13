@@ -31,12 +31,22 @@ Execute o comando abaixo para instalar as dependências:
 
 ```bash
 sudo apt install build-essential flex bison
+```
+
+▶️ Execução
+Foi criado um Makefile com os comandos necessários para compilar o projeto.
+
+Passos:
+Compile o projeto:
+
+```bash
+make
+```
+O script executará a análise do arquivo exemplo.foca automaticamente.
 
 👨‍💻 Autor
 Pedro Nunes
 Desenvolvido como parte da disciplina de Compiladores – UFRRJ
 Contribuições e sugestões são sempre bem-vindas!
 
-yaml
-Copiar
-Editar
+
