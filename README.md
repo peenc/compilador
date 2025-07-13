@@ -19,40 +19,24 @@ O **Vasco** é um compilador educacional criado com foco no aprendizado de técn
 
 ## 🔧 Instalação
 
-Você precisará das ferramentas:
+Você precisará das seguintes ferramentas:
 
 - `flex`
 - `bison`
 - `g++`
 
-## Ubuntu
+### Ubuntu
 
-bash
+Execute o comando abaixo para instalar as dependências:
+
+```bash
 sudo apt install build-essential flex bison
-
-###▶️ Execução
-Foi criado um Makefile com os comandos necessários para compilar o projeto.
-
-Passos:
-
-Compile o projeto:
-
-make
-
-O script executará a análise do arquivo exemplo.foca automaticamente.
-
-###📁 Estrutura do Projeto
-
-compilador/
-├── lexico.l          # Regras de análise léxica
-├── sintatico.y       # Regras de análise sintática
-├── exemplo.foca      # Código de teste na linguagem
-├── Makefile          # Script de build automatizado
-├── LICENSE           # Licença MIT
-└── README.md         # Documentação
-
 
 👨‍💻 Autor
 Pedro Nunes
-Desenvolvido como parte da disciplina de Compiladores - UFRRJ
+Desenvolvido como parte da disciplina de Compiladores – UFRRJ
 Contribuições e sugestões são sempre bem-vindas!
+
+yaml
+Copiar
+Editar
