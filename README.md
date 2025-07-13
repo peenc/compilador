@@ -45,8 +45,11 @@ make
 O script executará a análise do arquivo exemplo.foca automaticamente.
 
 👨‍💻 Autor
+
 Pedro Nunes
+
 Desenvolvido como parte da disciplina de Compiladores – UFRRJ
+
 Contribuições e sugestões são sempre bem-vindas!
 
 
