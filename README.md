@@ -34,18 +34,7 @@ sudo apt install build-essential flex bison
 Foi criado um Makefile com os comandos necessários para compilar o projeto.
 
 Passos:
-Compile o projeto:
 
-bash
-Copiar
-Editar
-make
-O script executará a análise do arquivo exemplo.foca automaticamente.
-
-▶️ Execução
-Foi criado um Makefile com os comandos necessários para compilar o projeto.
-
-Passos:
 Compile o projeto:
 
 make
