@@ -52,6 +52,17 @@ make
 
 O script executará a análise do arquivo exemplo.foca automaticamente.
 
+📁 Estrutura do Projeto
+
+compilador/
+├── lexico.l          # Regras de análise léxica
+├── sintatico.y       # Regras de análise sintática
+├── exemplo.foca      # Código de teste na linguagem
+├── Makefile          # Script de build automatizado
+├── LICENSE           # Licença MIT
+└── README.md         # Documentação
+
+
 👨‍💻 Autor
 Pedro Nunes
 Desenvolvido como parte da disciplina de Compiladores - UFRRJ
