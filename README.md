@@ -25,12 +25,12 @@ Você precisará das ferramentas:
 - `bison`
 - `g++`
 
-### Ubuntu
+## Ubuntu
 
 bash
 sudo apt install build-essential flex bison
 
-▶️ Execução
+###▶️ Execução
 Foi criado um Makefile com os comandos necessários para compilar o projeto.
 
 Passos:
@@ -41,7 +41,7 @@ make
 
 O script executará a análise do arquivo exemplo.foca automaticamente.
 
-📁 Estrutura do Projeto
+###📁 Estrutura do Projeto
 
 compilador/
 ├── lexico.l          # Regras de análise léxica
